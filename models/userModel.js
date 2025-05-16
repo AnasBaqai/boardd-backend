@@ -1,42 +1,18 @@
 "use strict";
 
-const { Schema, model } = require("mongoose");
+const { Schema, model, Types } = require("mongoose");
 const { sign } = require("jsonwebtoken");
-const {
-  ROLES,
-  WORK_TYPE,
-  CURRENT_ROLE,
-  TEAM_QUANTITY,
-  ORGANIZATION_QUANTITY,
-  SOURCE,
-  CHANNEL_PREFERENCE,
-} = require("../utils/constants");
+const { ROLES } = require("../utils/constants");
 const mongoosePaginate = require("mongoose-paginate-v2");
 const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
 const { getMongooseAggregatePaginatedData } = require("../utils");
 
-const generalQuestionsSchema = new Schema({
-  workType: { type: String, required: true, enum: Object.values(WORK_TYPE) },
-  currentRole: {
-    type: String,
-    required: true,
-    enum: Object.values(CURRENT_ROLE),
-  },
-  peopleQuantityInTeam: {
-    type: String,
-    required: true,
-    enum: Object.values(TEAM_QUANTITY),
-  },
-  peopleQuantityInOrganization: {
-    type: String,
-    required: true,
-    enum: Object.values(ORGANIZATION_QUANTITY),
-  },
-  source: { type: String, required: true, enum: Object.values(SOURCE) },
-});
-
 const userSchema = new Schema(
   {
+    companyId: {
+      type: Types.ObjectId,
+      ref: "Company",
+    },
     name: { type: String, required: true },
     dob: { type: Date },
     email: {
@@ -51,15 +27,9 @@ const userSchema = new Schema(
       type: { type: String, enum: ["Point"], default: "Point" },
       coordinates: { type: [Number, Number] },
     },
-    accountName: { type: String, required: true },
-    channelPreference: [{
-      type: String,
-      required: true,
-      enum: Object.values(CHANNEL_PREFERENCE),
-    }],
-    generalQuestions: { type: generalQuestionsSchema, required: true },
+
     image: { type: String },
-    role: { type: String, default: "user", enum: Object.values(ROLES) },
+    role: { type: String, default: "employee", enum: Object.values(ROLES) },
     isActive: { type: Boolean, default: true },
     fcmToken: { type: String },
     refreshToken: { type: String },
@@ -102,6 +72,7 @@ exports.generateToken = (user) => {
       id: user._id,
       email: user.email,
       role: user.role,
+      companyId: user.companyId,
     },
     process.env.JWT_SECRET,
     { expiresIn: "30d" }

@@ -1,9 +1,9 @@
 "use strict";
 
 const { Router } = require("express");
-const { signup, login } = require("../controller/user.controller");
+const { getCompany } = require("../controller/company.controller");
 
-class UserAPI {
+class CompanyApi {
   constructor() {
     this.router = Router();
     this.setupRoutes();
@@ -11,8 +11,7 @@ class UserAPI {
 
   setupRoutes() {
     let router = this.router;
-    router.post("/admin/signup", signup);
-    router.post("/login", login);
+    router.get("/", getCompany);
   }
 
   getRouter() {
@@ -20,8 +19,8 @@ class UserAPI {
   }
 
   getRouterGroup() {
-    return "/users";
+    return "/companies";
   }
 }
 
-module.exports = UserAPI;
+module.exports = CompanyApi;
