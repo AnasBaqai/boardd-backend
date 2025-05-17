@@ -1,7 +1,10 @@
 "use strict";
 
 const { Router } = require("express");
-const { getCompany } = require("../controller/company.controller");
+const {
+  getCompany,
+  updateCompany,
+} = require("../controller/company.controller");
 
 class CompanyApi {
   constructor() {
@@ -12,6 +15,7 @@ class CompanyApi {
   setupRoutes() {
     let router = this.router;
     router.get("/", getCompany);
+    router.put("/", updateCompany);
   }
 
   getRouter() {

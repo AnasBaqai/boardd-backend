@@ -16,6 +16,10 @@ exports.createManyInviteSlots = (obj) => InviteSlotModel.insertMany(obj);
 //find invite slot by query
 exports.findInviteSlot = (query) => InviteSlotModel.findOne(query);
 
+//find first available (unused) invite slot for a company
+exports.findAvailableInviteSlot = (query) =>
+  InviteSlotModel.findOne({ ...query, used: false }).sort({ slot: 1 });
+
 //update invite slot by query
 exports.updateInviteSlot = (query, obj) =>
   InviteSlotModel.findOneAndUpdate(query, obj, { new: true });

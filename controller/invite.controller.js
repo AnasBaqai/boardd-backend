@@ -28,13 +28,19 @@ exports.getUnusedInviteSlot = async (req, res, next) => {
         res,
         STATUS_CODES.NOT_FOUND
       );
-    // generate invite link
-    const inviteLink = `${
-      process.env.FRONTEND_URL || "http://localhost:3000"
-    }/invite/${company?.domain}/${unusedInviteSlot?.token}`;
+
+    // generate hashmap for invite links
+    const inviteLinks = {
+      private: `${process.env.FRONTEND_URL || "http://localhost:3000"}/invite/${
+        company?.domain
+      }/${unusedInviteSlot?.token}`,
+      public: `${process.env.FRONTEND_URL || "http://localhost:3000"}/invite/${
+        company?.domain
+      }/${joinToken}`,
+    };
     // return unused invite slot
     return generateResponse(
-      inviteLink,
+      inviteLinks,
       "unused invite slot found",
       res,
       STATUS_CODES.SUCCESS

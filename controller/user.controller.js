@@ -13,6 +13,7 @@ const {
   createManyInviteSlots,
   findInviteSlot,
   updateInviteSlot,
+  findAvailableInviteSlot,
 } = require("../models/inviteSlotModel");
 const {
   validateRequiredFields,
@@ -24,6 +25,7 @@ const {
   handleInviteSignup,
   handleDomainSignup,
   handleRegularLogin,
+  handlePublicSignup,
 } = require("./helpers/users/login.helper");
 
 exports.signup = async (req, res, next) => {
@@ -120,9 +122,9 @@ exports.signup = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { name, email, password } = parseBody(req.body);
-    const { token } = req?.query;
+    const { token, joinToken } = req?.query;
 
-    // Handle invite-based signup
+    // Handle invite-based signup (private invite)
     if (token) {
       // Validate required fields for new user signup
       const validationError = validateRequiredFields(
@@ -168,6 +170,65 @@ exports.login = async (req, res, next) => {
       return result;
     }
 
+    // Handle public link signup (joinToken)
+    if (joinToken) {
+      // Validate required fields for new user signup
+      const validationError = validateRequiredFields(
+        { name, email, password },
+        res
+      );
+      if (validationError) return validationError;
+
+      // Find company by joinToken
+      const company = await findCompany({ joinToken });
+      if (!company) {
+        return generateResponse(
+          null,
+          "Invalid join link",
+          res,
+          STATUS_CODES.NOT_FOUND
+        );
+      }
+
+      // Check if user with this email already exists
+      const existingUser = await findUser({ email });
+      if (existingUser) {
+        return generateResponse(
+          null,
+          "User with this email already exists",
+          res,
+          STATUS_CODES.CONFLICT
+        );
+      }
+
+      // Find an available invite slot
+      const availableSlot = await findAvailableInviteSlot({
+        companyId: company._id,
+      });
+      if (!availableSlot) {
+        return generateResponse(
+          null,
+          "No available seats for this company. Please contact the administrator.",
+          res,
+          STATUS_CODES.FORBIDDEN
+        );
+      }
+
+      // Handle public signup and mark slot as used
+      const result = await handlePublicSignup(
+        name,
+        email,
+        password,
+        company,
+        res
+      );
+      if (result.statusCode === STATUS_CODES.SUCCESS) {
+        await updateInviteSlot({ _id: availableSlot._id }, { used: true });
+      }
+      return result;
+    }
+
+    // Regular login or domain signup flow
     // Validate required fields for login/domain signup
     const validationError = validateRequiredFields({ email, password }, res);
     if (validationError) return validationError;

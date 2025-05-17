@@ -44,6 +44,7 @@ const CompanySchema = new Schema(
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    automaticSignups: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
