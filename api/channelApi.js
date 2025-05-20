@@ -1,7 +1,11 @@
 "use strict";
 
 const { Router } = require("express");
-const { createChannel } = require("../controller/channelController");
+const {
+  createChannel,
+  addUserToChannel,
+  getChannelJoiningLink,
+} = require("../controller/channelController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
 class ChannelApi {
@@ -13,6 +17,16 @@ class ChannelApi {
   setupRoutes() {
     let router = this.router;
     router.post("/", Auth([ROLES.ADMIN, ROLES.EMPLOYEE]), createChannel);
+    router.post(
+      "/add-member",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      addUserToChannel
+    );
+    router.get(
+      "/joining-link",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      getChannelJoiningLink
+    );
   }
 
   getRouter() {

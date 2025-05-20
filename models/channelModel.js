@@ -11,6 +11,7 @@ const channelSchema = new Schema({
   createdBy: { type: Types.ObjectId, ref: "User", required: true },
   channelToken: { type: String, required: true },
   tabs: [{ type: Types.ObjectId, ref: "ChannelTab" }],
+  members: [{ type: Types.ObjectId, ref: "User" }],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -25,3 +26,7 @@ exports.createChannel = (channel) => Channel.create(channel);
 
 //get A CHANNEL
 exports.findChannel = (query) => Channel.findOne(query);
+
+// add member to the channel
+exports.addMemberToChannel = (channelId, memberId) =>
+  Channel.findByIdAndUpdate(channelId, { $push: { members: memberId } });

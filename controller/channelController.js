@@ -1,10 +1,15 @@
 const { findUser } = require("../models/userModel");
 const { parseBody } = require("../utils");
 const { generateJoinToken } = require("./helpers/users/signup.helper");
-const { createChannel } = require("../models/channelModel");
+const {
+  createChannel,
+  addMemberToChannel,
+  findChannel,
+} = require("../models/channelModel");
 const { generateResponse } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
 const { validateRequiredFields } = require("./helpers/users/signup.helper");
+const Mailer = require("../utils/mailer");
 
 exports.createChannel = async (req, res, next) => {
   try {
@@ -70,6 +75,71 @@ exports.getChannelJoiningLink = async (req, res, next) => {
     return generateResponse(
       joiningLink,
       "Channel joining link fetched successfully",
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.log(error);
+    next(error);
+  }
+};
+
+// add user to the channel
+exports.addUserToChannel = async (req, res, next) => {
+  try {
+    const { email, channelToken } = parseBody(req.body);
+
+    const validationError = validateRequiredFields(
+      {
+        email,
+        channelToken,
+      },
+      res
+    );
+    if (validationError) return validationError;
+
+    const channel = await findChannel({ channelToken });
+    if (!channel) {
+      return generateResponse(
+        null,
+        "Channel not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
+    const user = await findUser({ email });
+    if (!user) {
+      return generateResponse(
+        null,
+        "User not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
+    // check if user is already a member of the channel
+    if (channel?.members?.includes(user._id)) {
+      return generateResponse(
+        null,
+        "User already a member of the channel",
+        res,
+        STATUS_CODES.CONFLICT
+      );
+    }
+    // check if user company is the same as the channel company
+    if (user.companyId !== channel.companyId) {
+      return generateResponse(
+        null,
+        "User not a member of the company",
+        res,
+        STATUS_CODES.CONFLICT
+      );
+    }
+    // add user to the channel
+    return generateResponse(
+      null,
+      "User added to the channel",
       res,
       STATUS_CODES.SUCCESS
     );
