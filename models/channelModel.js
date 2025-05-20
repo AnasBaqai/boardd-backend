@@ -1,0 +1,27 @@
+const { Schema, model, Types } = require("mongoose");
+const mongoosePaginate = require("mongoose-paginate-v2");
+const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
+const { getMongooseAggregatePaginatedData } = require("../utils");
+
+const channelSchema = new Schema({
+  channelName: { type: String, required: true },
+  channelDescription: { type: String, required: true },
+  companyId: { type: Types.ObjectId, ref: "Company", required: true },
+  isPrivate: { type: Boolean, default: false },
+  createdBy: { type: Types.ObjectId, ref: "User", required: true },
+  channelToken: { type: String, required: true },
+  tabs: [{ type: Types.ObjectId, ref: "ChannelTab" }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+channelSchema.plugin(mongoosePaginate);
+channelSchema.plugin(aggregatePaginate);
+
+const Channel = model("Channel", channelSchema);
+
+//create A CHANNEL
+exports.createChannel = (channel) => Channel.create(channel);
+
+//get A CHANNEL
+exports.findChannel = (query) => Channel.findOne(query);

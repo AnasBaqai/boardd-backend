@@ -71,3 +71,15 @@ exports.STATUS_CODES = Object.freeze({
   UNPROCESSABLE_ENTITY: 422,
   INTERNAL_SERVER_ERROR: 500,
 });
+
+exports.PRIVACY = Object.freeze({
+  PUBLIC: "public",
+  PRIVATE: "private",
+});
+
+exports.DEFAULT_TABS = Object.freeze({
+  TASK_MANAGEMENT: "task management",
+  CLIENT_MANAGEMENT: "client management",
+  FORM_BUILDER: "form builder",
+  WORK_IN_PROGRESS: "work in progress",
+});

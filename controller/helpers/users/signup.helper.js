@@ -4,9 +4,13 @@ const { STATUS_CODES } = require("../../../utils/constants");
 const crypto = require("crypto");
 
 // Validate required fields in requests
+//update this function to handle true and false values
+
 exports.validateRequiredFields = (fields, res) => {
   const missingFields = Object.entries(fields)
-    .filter(([_, value]) => !value)
+    .filter(
+      ([_, value]) => value === undefined || value === null || value === ""
+    )
     .map(([key]) => key);
 
   if (missingFields.length > 0) {

@@ -24,8 +24,8 @@ const crypto = require("crypto");
 exports.getUnusedInviteSlot = async (req, res, next) => {
   try {
     const { joinToken } = req?.query;
-    const adminUser = req.user;
-
+    const adminUserId = req.user.id;
+    const adminUser = await findUser({ _id: adminUserId });
     // Find company by joinToken or admin's company ID
     let company;
     if (joinToken) {
@@ -99,7 +99,6 @@ exports.sendBulkInvites = async (req, res, next) => {
   try {
     const { invites } = req.body;
     const adminUser = req.user;
-    console.log(adminUser);
 
     // Validate input
     if (
@@ -190,7 +189,7 @@ exports.sendBulkInvites = async (req, res, next) => {
 
         // Create invite link
         const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-        const inviteLink = `${baseUrl}/signup?token=${inviteToken}`;
+        const inviteLink = `${baseUrl}/signup?companyId=${company.domain}&token=${inviteToken}`;
 
         // Prepare email content
         const subject = `Invitation to join ${company.name}`;

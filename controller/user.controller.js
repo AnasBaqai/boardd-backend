@@ -7,6 +7,7 @@ const {
   createUser,
   generateToken,
   updateUser,
+  getAllUsers,
 } = require("../models/userModel");
 const { createCompany, findCompany } = require("../models/companyModel");
 const {
@@ -257,6 +258,52 @@ exports.login = async (req, res, next) => {
       STATUS_CODES.NOT_FOUND
     );
   } catch (error) {
+    return next(error);
+  }
+};
+
+// get users of particular company with matching name
+exports.getUsersOfCompany = async (req, res, next) => {
+  const { email, page, limit } = req.query;
+
+  try {
+    const userId = req.user.id;
+    const user = await findUser({ _id: userId });
+    const company = await findCompany({ _id: user.companyId });
+
+    // Build query to get users of particular company with the matching name
+    let queryArray = [];
+
+    // Add company filter
+    queryArray.push({ $match: { companyId: company._id } });
+
+    // Only add email filter if email parameter is provided
+    if (email && email.trim() !== "") {
+      // Use regex with ^ anchor to match emails that START with the search term
+      const searchTerm = `^${email.trim()}`;
+      queryArray.push({
+        $match: {
+          email: { $regex: searchTerm, $options: "i" },
+        },
+      });
+      console.log("Searching for emails starting with:", email.trim());
+    }
+
+    const users = await getAllUsers({
+      query: queryArray,
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      responseKey: "users",
+    });
+
+    return generateResponse(
+      users,
+      "Users fetched successfully",
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error in getUsersOfCompany:", error);
     return next(error);
   }
 };

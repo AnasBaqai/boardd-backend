@@ -4,6 +4,14 @@ const { STATUS_CODES } = require("../utils/constants");
 // get company by joinToken or id
 exports.getCompany = async (req, res, next) => {
   const { joinToken, companyId } = req?.query;
+  if (!joinToken && !companyId) {
+    return generateResponse(
+      null,
+      "Join token or company id is required",
+      res,
+      STATUS_CODES.BAD_REQUEST
+    );
+  }
   try {
     if (joinToken) {
       const company = await findCompany({ joinToken });
