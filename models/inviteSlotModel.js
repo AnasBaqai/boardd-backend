@@ -4,9 +4,21 @@ const InviteSlotSchema = new Schema({
   slot: { type: Number, required: true },
   token: { type: String, required: true, unique: true }, // secret per slot
   used: { type: Boolean, default: false },
+  reserved: { type: Boolean, default: false }, // Whether the slot is reserved for someone
+  reservedFor: { type: String }, // Email for whom the slot is reserved
+  reservedRole: { type: String }, // Role for the reserved user
+  reservedAt: { type: Date }, // When the slot was reserved
   createdAt: { type: Date, default: Date.now },
 });
 InviteSlotSchema.index({ companyId: 1, slot: 1 }, { unique: true });
+
+// Pre-save hook to set reservedAt when reserved is true
+InviteSlotSchema.pre("save", function (next) {
+  if (this.reserved && !this.reservedAt) {
+    this.reservedAt = new Date();
+  }
+  next();
+});
 
 const InviteSlotModel = model("InviteSlot", InviteSlotSchema);
 
@@ -18,7 +30,9 @@ exports.findInviteSlot = (query) => InviteSlotModel.findOne(query);
 
 //find first available (unused) invite slot for a company
 exports.findAvailableInviteSlot = (query) =>
-  InviteSlotModel.findOne({ ...query, used: false }).sort({ slot: 1 });
+  InviteSlotModel.findOne({ ...query, used: false, reserved: false }).sort({
+    slot: 1,
+  });
 
 //update invite slot by query
 exports.updateInviteSlot = (query, obj) =>

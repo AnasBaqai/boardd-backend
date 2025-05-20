@@ -162,6 +162,7 @@ exports.login = async (req, res, next) => {
         email,
         password,
         company,
+        inviteSlot,
         res
       );
       if (result.statusCode === STATUS_CODES.SUCCESS) {

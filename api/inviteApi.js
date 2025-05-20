@@ -1,8 +1,12 @@
 "use strict";
 
 const { Router } = require("express");
-const { getUnusedInviteSlot } = require("../controller/invite.controller");
-
+const {
+  getUnusedInviteSlot,
+  sendBulkInvites,
+} = require("../controller/invite.controller");
+const Auth = require("../middlewares/Auth");
+const { ROLES } = require("../utils/constants");
 class InviteAPI {
   constructor() {
     this.router = Router();
@@ -11,7 +15,8 @@ class InviteAPI {
 
   setupRoutes() {
     let router = this.router;
-    router.get("/", getUnusedInviteSlot);
+    router.get("/", Auth([ROLES.ADMIN]), getUnusedInviteSlot);
+    router.post("/", Auth([ROLES.ADMIN]), sendBulkInvites);
   }
 
   getRouter() {

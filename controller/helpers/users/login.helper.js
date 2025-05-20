@@ -1,5 +1,5 @@
 const { generateResponse } = require("../../../utils");
-const { STATUS_CODES } = require("../../../utils/constants");
+const { STATUS_CODES, ROLES } = require("../../../utils/constants");
 const {
   createUser,
   generateToken,
@@ -8,7 +8,14 @@ const {
 } = require("../../../models/userModel");
 const { hashPassword, comparePassword } = require("./signup.helper");
 
-exports.handleInviteSignup = async (name, email, password, company, res) => {
+exports.handleInviteSignup = async (
+  name,
+  email,
+  password,
+  company,
+  inviteSlot,
+  res
+) => {
   // Check if user with this email already exists
   const existingUser = await findUser({ email });
   if (existingUser) {
@@ -30,6 +37,23 @@ exports.handleInviteSignup = async (name, email, password, company, res) => {
     );
   }
 
+  // Check if the slot is reserved for a specific email
+  if (
+    inviteSlot.reserved &&
+    inviteSlot.reservedFor &&
+    inviteSlot.reservedFor !== email
+  ) {
+    return generateResponse(
+      null,
+      "This invite link is reserved for a different email address",
+      res,
+      STATUS_CODES.FORBIDDEN
+    );
+  }
+
+  // Determine role based on reservation or default to USER
+  const role = inviteSlot.reservedRole || ROLES.USER;
+
   // Create new user with active status
   const hashedPassword = await hashPassword(password);
   let user = await createUser({
@@ -38,6 +62,7 @@ exports.handleInviteSignup = async (name, email, password, company, res) => {
     password: hashedPassword,
     companyId: company._id,
     isActive: true, // Users from invite are active by default
+    role: role,
   });
 
   // Generate and update refresh token
@@ -61,6 +86,7 @@ exports.handlePublicSignup = async (name, email, password, company, res) => {
     password: hashedPassword,
     companyId: company._id,
     isActive: true, // Public link users are active by default
+    role: ROLES.USER, // Default role for public signups
   });
 
   // Generate and update refresh token
@@ -88,13 +114,13 @@ exports.handleDomainSignup = async (name, email, password, company, res) => {
   const hashedPassword = await hashPassword(password);
 
   // Create inactive user with company association
-
   let user = await createUser({
     name,
     email,
     password: hashedPassword,
     companyId: company._id,
-    isActive: company?.automaticSignups ? true : false, // Set user as inactive by default
+    isActive: false, // Set user as inactive by default
+    role: ROLES.EMPLOYEE, // Default role for domain signups
   });
 
   // Generate and update refresh token
