@@ -7,9 +7,13 @@ const {
   findChannel,
 } = require("../models/channelModel");
 const { generateResponse } = require("../utils");
-const { STATUS_CODES } = require("../utils/constants");
+const { STATUS_CODES, DEFAULT_TABS } = require("../utils/constants");
 const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const Mailer = require("../utils/mailer");
+const { createChannelTab } = require("../models/channelTabsModel");
+const {
+  createDefaultTabs,
+} = require("./helpers/channelTabs/channelTabs.helper");
 
 exports.createChannel = async (req, res, next) => {
   try {
@@ -33,8 +37,12 @@ exports.createChannel = async (req, res, next) => {
       isPrivate,
       createdBy: userId,
       channelToken: generateJoinToken(),
+      members: [userId],
     });
-
+    // create a default tab for the channel
+    const defaultTabs = createDefaultTabs(channel._id, userId, user.companyId);
+    // create default tabs with promise.all
+    await Promise.all(defaultTabs.map((tab) => createChannelTab(tab)));
     return generateResponse(
       channel,
       "Channel created successfully",
@@ -128,7 +136,7 @@ exports.addUserToChannel = async (req, res, next) => {
       );
     }
     // check if user company is the same as the channel company
-    if (user.companyId !== channel.companyId) {
+    if (user.companyId.toString() !== channel.companyId.toString()) {
       return generateResponse(
         null,
         "User not a member of the company",
@@ -137,8 +145,12 @@ exports.addUserToChannel = async (req, res, next) => {
       );
     }
     // add user to the channel
+    const updatedChannel = await addMemberToChannel(
+      { _id: channel._id },
+      { $push: { members: user._id } }
+    );
     return generateResponse(
-      null,
+      updatedChannel,
       "User added to the channel",
       res,
       STATUS_CODES.SUCCESS

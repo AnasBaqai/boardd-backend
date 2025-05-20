@@ -6,9 +6,12 @@ const { getMongooseAggregatePaginatedData } = require("../utils");
 const channelTabSchema = new Schema({
   channelId: { type: Types.ObjectId, ref: "Channel", required: true },
   tabName: { type: String, required: true },
+  isDefault: { type: Boolean, default: false },
   tabDescription: { type: String },
   members: [{ type: Types.ObjectId, ref: "User", required: true }],
   createdBy: { type: Types.ObjectId, ref: "User", required: true },
+  companyId: { type: Types.ObjectId, ref: "Company", required: true },
+  isPrivate: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

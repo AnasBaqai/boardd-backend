@@ -28,5 +28,5 @@ exports.createChannel = (channel) => Channel.create(channel);
 exports.findChannel = (query) => Channel.findOne(query);
 
 // add member to the channel
-exports.addMemberToChannel = (channelId, memberId) =>
-  Channel.findByIdAndUpdate(channelId, { $push: { members: memberId } });
+exports.addMemberToChannel = (query, obj) =>
+  Channel.findOneAndUpdate(query, obj, { new: true });

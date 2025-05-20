@@ -11,6 +11,7 @@ const {
 } = require("../models/inviteSlotModel");
 const Mailer = require("../utils/mailer");
 const crypto = require("crypto");
+const { generateInviteEmail } = require("../utils/emailTemplates");
 
 /**
  * Get unused invite slots for admin to share
@@ -191,84 +192,20 @@ exports.sendBulkInvites = async (req, res, next) => {
         const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
         const inviteLink = `${baseUrl}/signup?companyId=${company.domain}&token=${inviteToken}`;
 
-        // Prepare email content
+        // Prepare email content using the template
         const subject = `Invitation to join ${company.name}`;
-
-        // HTML email with clickable link
-        const htmlMessage = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .button {
-      display: inline-block;
-      padding: 10px 20px;
-      background-color: #4CAF50;
-      color: white;
-      text-decoration: none;
-      border-radius: 4px;
-      margin: 20px 0;
-    }
-    .footer {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #777;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>You've been invited to join ${company.name}</h2>
-    <p>Hello,</p>
-    <p>You have been invited to join <strong>${company.name}</strong> as a <strong>${role}</strong>.</p>
-    <p>Please click the button below to complete your registration:</p>
-    
-    <a href="${inviteLink}" class="button">Accept Invitation</a>
-    
-    <p>Or copy and paste this link into your browser:</p>
-    <p><a href="${inviteLink}">${inviteLink}</a></p>
-    
-    <p>This invite link will expire in 7 days.</p>
-    
-    <div class="footer">
-      <p>Best regards,<br>The ${company.name} Team</p>
-    </div>
-  </div>
-</body>
-</html>
-        `;
-
-        // Plain text fallback
-        const textMessage = `
-Hello,
-
-You have been invited to join ${company.name} as a ${role}.
-Please click on the link below or copy it into your browser to complete your registration:
-
-${inviteLink}
-
-This invite link will expire in 7 days.
-
-Best regards,
-The ${company.name} Team
-        `;
+        const { html, text } = generateInviteEmail({
+          companyName: company.name,
+          role,
+          inviteLink,
+        });
 
         // Send email
         await Mailer.sendEmail({
           email,
           subject,
-          message: textMessage,
-          html: htmlMessage,
+          message: text,
+          html: html,
         });
 
         // Mark slot as reserved (not used yet)
