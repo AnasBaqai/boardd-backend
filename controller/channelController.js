@@ -5,16 +5,16 @@ const {
   createChannel,
   addMemberToChannel,
   findChannel,
+  getAllChannelsDetails,
 } = require("../models/channelModel");
 const { generateResponse } = require("../utils");
-const { STATUS_CODES, DEFAULT_TABS } = require("../utils/constants");
+const { STATUS_CODES } = require("../utils/constants");
 const { validateRequiredFields } = require("./helpers/users/signup.helper");
-const Mailer = require("../utils/mailer");
 const { createChannelTab } = require("../models/channelTabsModel");
 const {
   createDefaultTabs,
 } = require("./helpers/channelTabs/channelTabs.helper");
-
+const { getAllMembersInChannelQuery } = require("./queries/channelQueries");
 exports.createChannel = async (req, res, next) => {
   try {
     const { channelName, channelDescription, isPrivate } = parseBody(req.body);
@@ -152,6 +152,47 @@ exports.addUserToChannel = async (req, res, next) => {
     return generateResponse(
       updatedChannel,
       "User added to the channel",
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.log(error);
+    next(error);
+  }
+};
+
+// get all members in  channel
+exports.getAllMembersInChannel = async (req, res, next) => {
+  try {
+    const { channelId } = req.query;
+    const { page, limit } = req.query;
+    const validationError = validateRequiredFields(
+      {
+        channelId,
+      },
+      res
+    );
+    if (validationError) return validationError;
+
+    const channel = await findChannel({ _id: channelId });
+    if (!channel) {
+      return generateResponse(
+        null,
+        "Channel not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+    const membersQuery = getAllMembersInChannelQuery(channelId);
+    const result = await getAllChannelsDetails({
+      query: membersQuery,
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      responseKey: "channel",
+    });
+    return generateResponse(
+      result,
+      "Members fetched successfully",
       res,
       STATUS_CODES.SUCCESS
     );

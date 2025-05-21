@@ -26,3 +26,7 @@ exports.createChannelTab = (channelTab) => ChannelTab.create(channelTab);
 
 //get A CHANNEL TAB
 exports.findChannelTab = (query) => ChannelTab.findOne(query);
+
+//update A CHANNEL TAB
+exports.updateChannelTab = (query, obj) =>
+  ChannelTab.findOneAndUpdate(query, obj, { new: true });

@@ -5,6 +5,7 @@ const {
   createChannel,
   addUserToChannel,
   getChannelJoiningLink,
+  getAllMembersInChannel,
 } = require("../controller/channelController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
@@ -26,6 +27,11 @@ class ChannelApi {
       "/joining-link",
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       getChannelJoiningLink
+    );
+    router.get(
+      "/members",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      getAllMembersInChannel
     );
   }
 

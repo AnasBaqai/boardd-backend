@@ -7,6 +7,7 @@ const UserApi = require("./userApi");
 const InviteApi = require("./inviteApi");
 const CompanyApi = require("./companyApi");
 const ChannelApi = require("./channelApi");
+const ChannelTabsApi = require("./channelTabsApi");
 // all API routing files import here like above
 
 class API {
@@ -22,6 +23,7 @@ class API {
     this.routeGroups.push(new InviteApi());
     this.routeGroups.push(new CompanyApi());
     this.routeGroups.push(new ChannelApi());
+    this.routeGroups.push(new ChannelTabsApi());
     // all routes register here like above
   }
 

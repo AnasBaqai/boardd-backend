@@ -9,7 +9,7 @@ const channelSchema = new Schema({
   companyId: { type: Types.ObjectId, ref: "Company", required: true },
   isPrivate: { type: Boolean, default: false },
   createdBy: { type: Types.ObjectId, ref: "User", required: true },
-  channelToken: { type: String, required: true },
+  channelToken: { type: String, required: true, unique: true },
   tabs: [{ type: Types.ObjectId, ref: "ChannelTab" }],
   members: [{ type: Types.ObjectId, ref: "User" }],
   createdAt: { type: Date, default: Date.now },
@@ -30,3 +30,20 @@ exports.findChannel = (query) => Channel.findOne(query);
 // add member to the channel
 exports.addMemberToChannel = (query, obj) =>
   Channel.findOneAndUpdate(query, obj, { new: true });
+
+// get all channels
+exports.getAllChannelsDetails = async ({
+  query,
+  page,
+  limit,
+  responseKey = "data",
+}) => {
+  const { data, pagination } = await getMongooseAggregatePaginatedData({
+    model: Channel,
+    query,
+    page,
+    limit,
+  });
+
+  return { [responseKey]: data, pagination };
+};
