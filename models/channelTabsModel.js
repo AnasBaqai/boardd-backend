@@ -30,3 +30,15 @@ exports.findChannelTab = (query) => ChannelTab.findOne(query);
 //update A CHANNEL TAB
 exports.updateChannelTab = (query, obj) =>
   ChannelTab.findOneAndUpdate(query, obj, { new: true });
+
+//get all tabs
+exports.getAllTabs = async ({ query, page, limit, responseKey = "data" }) => {
+  const { data, pagination } = await getMongooseAggregatePaginatedData({
+    model: ChannelTab,
+    query,
+    page,
+    limit,
+  });
+
+  return { [responseKey]: data, pagination };
+};

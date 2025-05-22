@@ -2,15 +2,23 @@ const { findChannel } = require("../models/channelModel");
 const {
   updateChannelTab,
   findChannelTab,
+  getAllTabs,
 } = require("../models/channelTabsModel");
 const { generateResponse, parseBody } = require("../utils");
 const mongoose = require("mongoose");
 const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { STATUS_CODES } = require("../utils/constants");
+const {
+  getAllTabsOfMemberInChannelQuery,
+} = require("./queries/channelTabsQuery");
+const { findCompany } = require("../models/companyModel");
+const { findUser } = require("../models/userModel");
 
 exports.addMembersToChannelTab = async (req, res, next) => {
   try {
     const { channelId, assignments } = parseBody(req.body);
+    const requestingUserId = req.user.id; // Get ID of user making the request
+
     const validationError = validateRequiredFields(
       { channelId, assignments },
       res
@@ -26,6 +34,27 @@ exports.addMembersToChannelTab = async (req, res, next) => {
         STATUS_CODES.NOT_FOUND
       );
 
+    // Check if requesting user is the channel creator
+    if (channel.createdBy.toString() !== requestingUserId.toString()) {
+      return generateResponse(
+        null,
+        "Only channel creator can add members",
+        res,
+        STATUS_CODES.FORBIDDEN
+      );
+    }
+
+    // Get company details for domain check
+    const company = await findCompany({ _id: channel.companyId });
+    if (!company) {
+      return generateResponse(
+        null,
+        "Company not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
     try {
       // First validate all tabs and check for duplicates
       const validationPromises = assignments.map(async (assignment) => {
@@ -37,20 +66,35 @@ exports.addMembersToChannelTab = async (req, res, next) => {
           throw new Error(`Tab with ID ${tabId} not found`);
         }
 
-        // Check if any users are already members of this tab
-        const existingMembers = tab.members || [];
-        const duplicateMembers = memberids.filter((id) =>
-          existingMembers.some(
-            (memberId) => memberId.toString() === id.toString()
-          )
-        );
+        // Validate each user in memberids
+        for (const memberId of memberids) {
+          const user = await findUser({ _id: memberId });
+          if (!user) {
+            throw new Error(`User with ID ${memberId} not found`);
+          }
 
-        if (duplicateMembers.length > 0) {
-          throw new Error(
-            `Some users are already members of this tab: ${duplicateMembers.join(
-              ", "
-            )}`
-          );
+          // Check if user is active
+          if (!user.isActive) {
+            throw new Error(`Cannot add inactive user: ${user.email}`);
+          }
+
+          // Check user's domain
+          const userDomain = user.email.split("@")[1];
+          if (userDomain !== company.domain) {
+            throw new Error(
+              `User ${user.email} domain does not match company domain`
+            );
+          }
+
+          // Check if user is already a member
+          const existingMembers = tab.members || [];
+          if (
+            existingMembers.some((id) => id.toString() === memberId.toString())
+          ) {
+            throw new Error(
+              `User ${user.email} is already a member of this tab`
+            );
+          }
         }
 
         return { tabId, memberids };
@@ -86,6 +130,43 @@ exports.addMembersToChannelTab = async (req, res, next) => {
         STATUS_CODES.BAD_REQUEST
       );
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+//get all tabs of a channel in which the user is a member
+exports.getAllTabsOfChannel = async (req, res, next) => {
+  try {
+    const { channelId, page, limit } = req.query;
+    const userId = req.user.id; // Get the current user's ID
+    const validationError = validateRequiredFields({ channelId }, res);
+    if (validationError) return validationError;
+
+    const channel = await findChannel({ _id: channelId });
+    if (!channel)
+      return generateResponse(
+        null,
+        "Channel not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+
+    // Use the query to get only tabs where the user is a member
+    const query = getAllTabsOfMemberInChannelQuery(channelId, userId);
+    const tabs = await getAllTabs({
+      query,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 10,
+      responseKey: "tabs",
+    });
+
+    return generateResponse(
+      tabs,
+      "Tabs fetched successfully",
+      res,
+      STATUS_CODES.SUCCESS
+    );
   } catch (error) {
     next(error);
   }

@@ -3,6 +3,7 @@
 const { Router } = require("express");
 const {
   addMembersToChannelTab,
+  getAllTabsOfChannel,
 } = require("../controller/channelTabsController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
@@ -18,6 +19,11 @@ class ChannelTabsApi {
       "/add-members",
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       addMembersToChannelTab
+    );
+    router.get(
+      "/members",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      getAllTabsOfChannel
     );
   }
 
