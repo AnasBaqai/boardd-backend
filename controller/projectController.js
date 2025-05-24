@@ -1,20 +1,13 @@
 const { findChannel } = require("../models/channelModel");
 const { findChannelTab } = require("../models/channelTabsModel");
+const { createProject } = require("../models/projectModel");
 const { parseBody, generateResponse, formatDate } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
 
-exports.createProject = async (req, res, next) => {
+exports.CreateProject = async (req, res, next) => {
   try {
-    const {
-      name,
-      description,
-      tabId,
-      status,
-      startDate,
-      endDate,
-      color,
-      priority,
-    } = parseBody(req.body);
+    const { name, description, tabId, startDate, endDate, color, priority } =
+      parseBody(req.body);
     const userId = req?.user?.id;
 
     // check if tabId is valid
@@ -38,7 +31,6 @@ exports.createProject = async (req, res, next) => {
       companyId,
       channelId,
       tabId,
-      status,
       startDate: formatDate(startDate),
       endDate: formatDate(endDate),
       color,

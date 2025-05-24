@@ -1,3 +1,5 @@
+const { object } = require("joi");
+
 exports.ROLES = Object.freeze({
   USER: "user",
   ADMIN: "admin",
@@ -82,4 +84,14 @@ exports.DEFAULT_TABS = Object.freeze({
   CLIENT_MANAGEMENT: "client management",
   FORM_BUILDER: "form builder",
   WORK_IN_PROGRESS: "work in progress",
+});
+
+// Custom field type enum
+exports.CUSTOM_FIELD_TYPES = Object.freeze({
+  NUMBER: "number",
+  TEXT: "text",
+  DATE: "date",
+  TEXTAREA: "textarea",
+  CHECKBOX: "checkbox",
+  DROPDOWN: "dropdown",
 });
