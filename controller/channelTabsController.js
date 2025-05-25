@@ -10,6 +10,7 @@ const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { STATUS_CODES } = require("../utils/constants");
 const {
   getAllTabsOfMemberInChannelQuery,
+  getAllTabMembersQuery,
 } = require("./queries/channelTabsQuery");
 const { findCompany } = require("../models/companyModel");
 const { findUser } = require("../models/userModel");
@@ -168,6 +169,73 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
       STATUS_CODES.SUCCESS
     );
   } catch (error) {
+    next(error);
+  }
+};
+
+// get all members of a tab
+exports.getAllTabMembers = async (req, res, next) => {
+  try {
+    const { tabId } = req.params;
+    const userId = req.user.id;
+
+    // Validate tabId
+    if (!tabId) {
+      return generateResponse(
+        null,
+        "Tab ID is required",
+        res,
+        STATUS_CODES.BAD_REQUEST
+      );
+    }
+
+    // Find the tab
+    const tab = await findChannelTab({ _id: tabId });
+    if (!tab) {
+      return generateResponse(
+        null,
+        "Tab not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
+    // Check if the requesting user is a member of the tab
+    if (!tab.members.includes(userId)) {
+      return generateResponse(
+        null,
+        "You are not a member of this tab",
+        res,
+        STATUS_CODES.FORBIDDEN
+      );
+    }
+
+    // Get all members with their details
+    const query = getAllTabMembersQuery(tabId);
+    const result = await getAllTabs({
+      query,
+      page: 1,
+      limit: 1,
+      responseKey: "tab",
+    });
+
+    if (!result.tab.length) {
+      return generateResponse(
+        null,
+        "No members found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
+    return generateResponse(
+      result.tab[0],
+      "Tab members fetched successfully",
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error in getAllTabMembers:", error);
     next(error);
   }
 };
