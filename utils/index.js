@@ -5,6 +5,7 @@ const fs = require("fs");
 const FCM = require("fcm-node");
 const { STATUS_CODES } = require("./constants");
 const moment = require("moment");
+const path = require("path");
 
 exports.generateResponse = (data, message, res, code = 200) => {
   return res.status(code).json({
@@ -24,36 +25,79 @@ exports.generateRandomOTP = () => {
   return Math.floor(100000 + Math.random() * 900000);
 };
 
-exports.upload = (folderName) => {
-  return multer({
-    storage: multer.diskStorage({
-      destination: function (req, file, cb) {
-        const path = `uploads/${folderName}/`;
-        fs.mkdirSync(path, { recursive: true });
-        cb(null, path);
-      },
+// File upload configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Choose destination based on file type
+    const isImage = file.mimetype.startsWith("image/");
+    const uploadPath = isImage
+      ? "./uploadFiles/images"
+      : "./uploadFiles/documents";
 
-      // By default, multer removes file extensions so let's add them back
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        cb(null, uniqueSuffix + "." + file.originalname.split(".").pop());
-      },
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 }, // max 10MB //
-    fileFilter: (req, file, cb) => {
-      // check mime type
-      if (
-        !file.mimetype.match(
-          /image\/(jpg|JPG|webp|jpeg|JPEG|png|PNG|gif|GIF|jfif|JFIF)/
-        )
-      ) {
-        req.fileValidationError = "Only image files are allowed!";
-        return cb(null, false);
-      }
+    // Create directories if they don't exist
+    fs.mkdirSync("./uploadFiles", { recursive: true });
+    fs.mkdirSync("./uploadFiles/images", { recursive: true });
+    fs.mkdirSync("./uploadFiles/documents", { recursive: true });
+
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename with timestamp and original extension
+    const fileName = `${file.fieldname}-${Date.now()}${path.extname(
+      file.originalname
+    )}`;
+    const isImage = file.mimetype.startsWith("image/");
+    const filePath = isImage
+      ? `/uploadFiles/images/${fileName}`
+      : `/uploadFiles/documents/${fileName}`;
+    req.filepath = filePath;
+    cb(null, fileName);
+  },
+});
+
+// File type validation
+const fileFilter = (req, file, cb) => {
+  // Allowed file types
+  const allowedDocTypes = /pdf|docx?|xlsx?|pptx?/;
+  const allowedImageTypes = /jpeg|jpg|png|gif/;
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isImage = file.mimetype.startsWith("image/");
+
+  if (isImage) {
+    // Check image types
+    if (allowedImageTypes.test(ext.substring(1))) {
       cb(null, true);
-    },
-  });
+    } else {
+      cb(new Error("Only JPEG, JPG, PNG and GIF images are allowed!"));
+    }
+  } else {
+    // Check document types
+    const isValidExt = allowedDocTypes.test(ext.substring(1));
+    const isValidMime =
+      /application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/vnd\.ms-powerpoint|application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation/.test(
+        file.mimetype
+      );
+
+    if (isValidExt && isValidMime) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF, PPT, Excel, and Word documents are allowed!"));
+    }
+  }
 };
+
+// Configure multer
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
+// Export the upload middleware
+exports.uploadFiles = upload;
 
 exports.sendNotificationToAll = ({ body, fcmTokens }) => {
   const serverKey = process.env.FIREBASE_SERVER_KEY;

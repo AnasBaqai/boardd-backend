@@ -12,6 +12,7 @@ const TaskApi = require("./taskApi");
 const SubtaskApi = require("./subtaskApi");
 const ActivityApi = require("./activityApi");
 const ProjectApi = require("./projectAPi");
+const UploadApi = require("./uploadApi");
 // all API routing files import here like above
 
 class API {
@@ -32,6 +33,7 @@ class API {
     this.routeGroups.push(new SubtaskApi());
     this.routeGroups.push(new ActivityApi());
     this.routeGroups.push(new ProjectApi());
+    this.routeGroups.push(new UploadApi());
     // all routes register here like above
   }
 
