@@ -3,6 +3,7 @@ const {
   updateChannelTab,
   findChannelTab,
   getAllTabs,
+  createChannelTab,
 } = require("../models/channelTabsModel");
 const { generateResponse, parseBody } = require("../utils");
 const mongoose = require("mongoose");
@@ -14,6 +15,7 @@ const {
 } = require("./queries/channelTabsQuery");
 const { findCompany } = require("../models/companyModel");
 const { findUser } = require("../models/userModel");
+const { parse } = require("dotenv");
 
 exports.addMembersToChannelTab = async (req, res, next) => {
   try {
@@ -237,5 +239,46 @@ exports.getAllTabMembers = async (req, res, next) => {
   } catch (error) {
     console.error("Error in getAllTabMembers:", error);
     next(error);
+  }
+};
+
+// create a new tab
+exports.createNewChannelTab = async (req, res, next) => {
+  try {
+    const { tabName, channelId, isPrivate } = parseBody(req.body);
+    console.log(tabName, channelId, isPrivate);
+    const validationError = validateRequiredFields(
+      { tabName, channelId, isPrivate },
+      res
+    );
+    if (validationError) return validationError;
+    const userId = req.user.id;
+    // find channnel
+    const channel = await findChannel({ _id: channelId });
+    if (!channel)
+      return generateResponse(
+        null,
+        "channel not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    // create channel tab
+    const channelTabBody = {
+      channelId,
+      tabName,
+      members: [userId],
+      createdBy: userId,
+      companyId: channel.companyId,
+      isPrivate,
+    };
+    const newChannelTab = await createChannelTab(channelTabBody);
+    return generateResponse(
+      newChannelTab,
+      "new channel tab successfully created",
+      res,
+      STATUS_CODES.CREATED
+    );
+  } catch (err) {
+    next(err);
   }
 };

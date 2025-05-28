@@ -5,6 +5,7 @@ const {
   addMembersToChannelTab,
   getAllTabsOfChannel,
   getAllTabMembers,
+  createNewChannelTab,
 } = require("../controller/channelTabsController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
@@ -16,6 +17,7 @@ class ChannelTabsApi {
 
   setupRoutes() {
     let router = this.router;
+    router.post("/", Auth([ROLES.ADMIN, ROLES.EMPLOYEE]), createNewChannelTab);
     router.post(
       "/add-members",
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
