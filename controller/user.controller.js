@@ -277,6 +277,9 @@ exports.getUsersOfCompany = async (req, res, next) => {
     // Add company filter
     queryArray.push({ $match: { companyId: company._id } });
 
+    // Add active users filter
+    queryArray.push({ $match: { isActive: true } });
+
     // Only add email filter if email parameter is provided
     if (email && email.trim() !== "") {
       // Use regex with ^ anchor to match emails that START with the search term
