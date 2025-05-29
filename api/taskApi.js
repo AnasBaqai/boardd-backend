@@ -8,6 +8,11 @@ const {
 } = require("../controller/task.controller");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
+const {
+  validateCreateTask,
+  validateBatchUpdateTask,
+  validateTaskIdParam,
+} = require("../validation/taskValidation");
 
 class TaskApi {
   constructor() {
@@ -18,15 +23,28 @@ class TaskApi {
   registerRoutes() {
     let router = this.router;
 
-    // Create a new task
-    router.post("/", Auth([ROLES.ADMIN, ROLES.EMPLOYEE]), createTask);
+    // Create a new task with validation
+    router.post(
+      "/",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateCreateTask,
+      createTask
+    );
 
-    // Get task by ID
-    router.get("/:taskId", Auth([ROLES.ADMIN, ROLES.EMPLOYEE]), getTaskById);
-    // Batch update task (replaces old update endpoint)
+    // Get task by ID with parameter validation
+    router.get(
+      "/:taskId",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateTaskIdParam,
+      getTaskById
+    );
+
+    // Batch update task with validation
     router.put(
       "/:taskId/batch",
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateTaskIdParam,
+      validateBatchUpdateTask,
       batchUpdateTask
     );
   }

@@ -2,7 +2,6 @@
 
 const { parseBody, generateResponse } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
-const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { findUser } = require("../models/userModel");
 const { findProject } = require("../models/projectModel");
 const {
@@ -37,10 +36,6 @@ exports.createTask = async (req, res, next) => {
     const { title, projectId, assignedTo, priority, dueDate } = parseBody(
       req.body
     );
-
-    // Validate required fields
-    const validationError = validateRequiredFields({ title, projectId }, res);
-    if (validationError) return validationError;
 
     // Check if project exists and get context
     const project = await findProject({ _id: projectId });

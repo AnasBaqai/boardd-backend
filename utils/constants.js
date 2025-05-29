@@ -1,5 +1,3 @@
-const { object } = require("joi");
-
 exports.ROLES = Object.freeze({
   USER: "user",
   ADMIN: "admin",

@@ -12,6 +12,7 @@ const {
 const Mailer = require("../utils/mailer");
 const crypto = require("crypto");
 const { generateInviteEmail } = require("../utils/emailTemplates");
+const { findUser } = require("../models/userModel");
 
 /**
  * Get unused invite slots for admin to share

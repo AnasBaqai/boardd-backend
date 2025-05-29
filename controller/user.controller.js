@@ -17,7 +17,6 @@ const {
   findAvailableInviteSlot,
 } = require("../models/inviteSlotModel");
 const {
-  validateRequiredFields,
   hashPassword,
   generateJoinToken,
   createInviteSlots,
@@ -40,21 +39,6 @@ exports.signup = async (req, res, next) => {
       generalQuestions,
       channelPreference,
     } = parseBody(req.body);
-
-    // Validate required fields
-    const validationError = validateRequiredFields(
-      {
-        name,
-        email,
-        password,
-        accountName,
-        role,
-        generalQuestions,
-        channelPreference,
-      },
-      res
-    );
-    if (validationError) return validationError;
 
     // Check if user exists
     const existingUser = await findUser({ email });
@@ -127,13 +111,6 @@ exports.login = async (req, res, next) => {
 
     // Handle invite-based signup (private invite)
     if (token) {
-      // Validate required fields for new user signup
-      const validationError = validateRequiredFields(
-        { name, email, password },
-        res
-      );
-      if (validationError) return validationError;
-
       // Validate invite token and get company
       const inviteSlot = await findInviteSlot({ token });
       if (!inviteSlot || inviteSlot?.used) {
@@ -174,13 +151,6 @@ exports.login = async (req, res, next) => {
 
     // Handle public link signup (joinToken)
     if (joinToken) {
-      // Validate required fields for new user signup
-      const validationError = validateRequiredFields(
-        { name, email, password },
-        res
-      );
-      if (validationError) return validationError;
-
       // Find company by joinToken
       const company = await findCompany({ joinToken });
       if (!company) {
@@ -231,10 +201,6 @@ exports.login = async (req, res, next) => {
     }
 
     // Regular login or domain signup flow
-    // Validate required fields for login/domain signup
-    const validationError = validateRequiredFields({ email, password }, res);
-    if (validationError) return validationError;
-
     // Check if user exists
     const existingUser = await findUser({ email }).select("+password");
     if (existingUser) {

@@ -8,6 +8,13 @@ const {
 } = require("../controller/user.controller");
 const { ROLES } = require("../utils/constants");
 const Auth = require("../middlewares/Auth");
+const {
+  validateSignup,
+  validateLogin,
+  validateGetUsersQuery,
+} = require("../validation/userValidation");
+const { validateTokenQuery } = require("../validation/authValidation");
+
 class UserAPI {
   constructor() {
     this.router = Router();
@@ -16,9 +23,20 @@ class UserAPI {
 
   setupRoutes() {
     let router = this.router;
-    router.post("/admin/signup", signup);
-    router.post("/login", login);
-    router.get("/", Auth([ROLES.ADMIN]), getUsersOfCompany);
+
+    // Admin signup with validation
+    router.post("/admin/signup", validateSignup, signup);
+
+    // Login with validation (tokens are optional, handled in controller)
+    router.post("/login", validateLogin, login);
+
+    // Get users with query validation
+    router.get(
+      "/",
+      Auth([ROLES.ADMIN]),
+      validateGetUsersQuery,
+      getUsersOfCompany
+    );
   }
 
   getRouter() {
