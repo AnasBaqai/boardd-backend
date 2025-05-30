@@ -103,12 +103,8 @@ exports.handlePublicSignup = async (name, email, password, company, res) => {
 
 exports.handleDomainSignup = async (name, email, password, company, res) => {
   if (!name) {
-    return generateResponse(
-      null,
-      "Name is required for new user registration",
-      res,
-      STATUS_CODES.BAD_REQUEST
-    );
+    // assign name from email first part
+    name = email.split("@")[0];
   }
 
   const hashedPassword = await hashPassword(password);

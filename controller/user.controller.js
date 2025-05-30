@@ -246,16 +246,134 @@ exports.getUsersOfCompany = async (req, res, next) => {
     // Add active users filter
     queryArray.push({ $match: { isActive: true } });
 
+    // Exclude the current logged-in user from results
+    queryArray.push({ $match: { _id: { $ne: user._id } } });
+
     // Only add email filter if email parameter is provided
     if (email && email.trim() !== "") {
-      // Use regex with ^ anchor to match emails that START with the search term
-      const searchTerm = `^${email.trim()}`;
+      const searchTerm = email.trim();
+
+      // Search for the term anywhere in email or name
       queryArray.push({
         $match: {
-          email: { $regex: searchTerm, $options: "i" },
+          $or: [
+            { email: { $regex: searchTerm, $options: "i" } },
+            { name: { $regex: searchTerm, $options: "i" } },
+          ],
         },
       });
-      console.log("Searching for emails starting with:", email.trim());
+
+      // Add fields to calculate ranking score
+      queryArray.push({
+        $addFields: {
+          emailStartsWithSearch: {
+            $cond: {
+              if: {
+                $regexMatch: {
+                  input: "$email",
+                  regex: `^${searchTerm}`,
+                  options: "i",
+                },
+              },
+              then: 1,
+              else: 0,
+            },
+          },
+          nameStartsWithSearch: {
+            $cond: {
+              if: {
+                $regexMatch: {
+                  input: "$name",
+                  regex: `^${searchTerm}`,
+                  options: "i",
+                },
+              },
+              then: 1,
+              else: 0,
+            },
+          },
+          sortScore: {
+            $add: [
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$email",
+                      regex: `^${searchTerm}`,
+                      options: "i",
+                    },
+                  },
+                  then: 10, // High priority for email starting with search
+                  else: 0,
+                },
+              },
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$name",
+                      regex: `^${searchTerm}`,
+                      options: "i",
+                    },
+                  },
+                  then: 8, // High priority for name starting with search
+                  else: 0,
+                },
+              },
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$email",
+                      regex: searchTerm,
+                      options: "i",
+                    },
+                  },
+                  then: 2, // Lower priority for email containing search
+                  else: 0,
+                },
+              },
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$name",
+                      regex: searchTerm,
+                      options: "i",
+                    },
+                  },
+                  then: 1, // Lower priority for name containing search
+                  else: 0,
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      // Sort by score (descending) then by name (ascending)
+      queryArray.push({
+        $sort: {
+          sortScore: -1,
+          name: 1,
+        },
+      });
+
+      // Remove the temporary fields before returning results
+      queryArray.push({
+        $project: {
+          emailStartsWithSearch: 0,
+          nameStartsWithSearch: 0,
+          sortScore: 0,
+        },
+      });
+
+      console.log("Searching for emails/names containing:", searchTerm);
+    } else {
+      // If no search term, just sort by name
+      queryArray.push({
+        $sort: { name: 1 },
+      });
     }
 
     const users = await getAllUsers({
