@@ -2,7 +2,6 @@
 
 const { parseBody, generateResponse } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
-const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { findUser } = require("../models/userModel");
 const { findTask } = require("../models/taskModel");
 const { findProject } = require("../models/projectModel");
@@ -20,16 +19,13 @@ const { findChannelTab } = require("../models/channelTabsModel");
 const { findChannel } = require("../models/channelModel");
 const { createNotification } = require("../models/notificationModel");
 const { emitUserNotification } = require("../utils/socket");
+
 /**
  * Create a new subtask
  */
 exports.createSubtask = async (req, res, next) => {
   try {
     const { title, taskId, assignedTo } = parseBody(req.body);
-
-    // Validate required fields
-    const validationError = validateRequiredFields({ title, taskId }, res);
-    if (validationError) return validationError;
 
     // Check if task exists
     const task = await findTask({ _id: taskId });
@@ -228,6 +224,7 @@ exports.updateSubtask = async (req, res, next) => {
   try {
     const { subtaskId } = req.params;
     const updates = parseBody(req.body);
+    const userId = req.user.id;
 
     // Find subtask
     const subtask = await findSubtask({ _id: subtaskId });
@@ -235,6 +232,17 @@ exports.updateSubtask = async (req, res, next) => {
       return generateResponse(
         null,
         "Subtask not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
+    // Get project for context
+    const project = await findProject({ _id: subtask.projectId });
+    if (!project) {
+      return generateResponse(
+        null,
+        "Project not found",
         res,
         STATUS_CODES.NOT_FOUND
       );
@@ -272,7 +280,7 @@ exports.updateSubtask = async (req, res, next) => {
               projectId: subtask.projectId,
               taskId: subtask.taskId,
               subtaskId: subtask._id,
-              userId: req.user.id,
+              userId,
               actionType: "UPDATE_SUBTASK",
               field,
               previousValue: previousValues[field],
@@ -318,6 +326,7 @@ exports.updateSubtask = async (req, res, next) => {
 exports.deleteSubtask = async (req, res, next) => {
   try {
     const { subtaskId } = req.params;
+    const userId = req.user.id;
 
     // Find subtask
     const subtask = await findSubtask({ _id: subtaskId });
@@ -330,12 +339,23 @@ exports.deleteSubtask = async (req, res, next) => {
       );
     }
 
+    // Get project for context
+    const project = await findProject({ _id: subtask.projectId });
+    if (!project) {
+      return generateResponse(
+        null,
+        "Project not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
+
     // Create activity record
     const activity = await createActivity({
       projectId: subtask.projectId,
       taskId: subtask.taskId,
       subtaskId: subtask._id,
-      userId: req.user.id,
+      userId,
       actionType: "DELETE_SUBTASK",
     });
 
