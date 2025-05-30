@@ -7,6 +7,15 @@ const {
 } = require("../controller/company.controller");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
+const {
+  validateCreateCompany,
+  validateUpdateCompany,
+  validateGetCompanyQuery,
+  validateUpdateCompanyQuery,
+  validateCompanyIdParam,
+  validateGetCompaniesQuery,
+} = require("../validation/companyValidation");
+
 class CompanyApi {
   constructor() {
     this.router = Router();
@@ -15,8 +24,23 @@ class CompanyApi {
 
   setupRoutes() {
     let router = this.router;
-    router.get("/", Auth([ROLES.ADMIN, ROLES.EMPLOYEE]), getCompany);
-    router.put("/", Auth([ROLES.ADMIN]), updateCompany);
+
+    // Get company with query validation
+    router.get(
+      "/",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateGetCompanyQuery,
+      getCompany
+    );
+
+    // Update company with validation
+    router.put(
+      "/",
+      Auth([ROLES.ADMIN]),
+      validateUpdateCompanyQuery,
+      validateUpdateCompany,
+      updateCompany
+    );
   }
 
   getRouter() {

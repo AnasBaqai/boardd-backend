@@ -1,20 +1,21 @@
-const { generateResponse } = require("../utils");
+const { generateResponse, parseBody } = require("../utils");
 const { findCompany, updateCompany } = require("../models/companyModel");
 const { STATUS_CODES } = require("../utils/constants");
 // get company by joinToken or id
 exports.getCompany = async (req, res, next) => {
-  const { joinToken, companyId } = req?.query;
-  if (!joinToken && !companyId) {
-    return generateResponse(
-      null,
-      "Join token or company id is required",
-      res,
-      STATUS_CODES.BAD_REQUEST
-    );
-  }
   try {
+    const { joinToken, companyId } = req.query;
+
     if (joinToken) {
       const company = await findCompany({ joinToken });
+      if (!company) {
+        return generateResponse(
+          null,
+          "Company not found with this join token",
+          res,
+          STATUS_CODES.NOT_FOUND
+        );
+      }
       return generateResponse(
         company,
         "Company found",
@@ -22,8 +23,17 @@ exports.getCompany = async (req, res, next) => {
         STATUS_CODES.SUCCESS
       );
     }
+
     if (companyId) {
       const company = await findCompany({ _id: companyId });
+      if (!company) {
+        return generateResponse(
+          null,
+          "Company not found with this ID",
+          res,
+          STATUS_CODES.NOT_FOUND
+        );
+      }
       return generateResponse(
         company,
         "Company found",
@@ -31,6 +41,7 @@ exports.getCompany = async (req, res, next) => {
         STATUS_CODES.SUCCESS
       );
     }
+
     return generateResponse(
       null,
       "Company not found",
@@ -44,10 +55,10 @@ exports.getCompany = async (req, res, next) => {
 
 // update company
 exports.updateCompany = async (req, res, next) => {
-  const { companyId } = req?.query;
-  // get complete body
-  const body = req?.body;
   try {
+    const { companyId } = req.query;
+    const updates = parseBody(req.body);
+
     // find company
     const company = await findCompany({ _id: companyId });
     if (!company) {
@@ -58,11 +69,12 @@ exports.updateCompany = async (req, res, next) => {
         STATUS_CODES.NOT_FOUND
       );
     }
+
     // update company
-    const updatedCompany = await updateCompany({ _id: companyId }, body);
+    const updatedCompany = await updateCompany({ _id: companyId }, updates);
     return generateResponse(
       updatedCompany,
-      "Company updated",
+      "Company updated successfully",
       res,
       STATUS_CODES.SUCCESS
     );

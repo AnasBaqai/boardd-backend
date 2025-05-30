@@ -7,7 +7,6 @@ const {
 } = require("../models/channelTabsModel");
 const { generateResponse, parseBody } = require("../utils");
 const mongoose = require("mongoose");
-const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { STATUS_CODES } = require("../utils/constants");
 const {
   getAllTabsOfMemberInChannelQuery,
@@ -15,18 +14,11 @@ const {
 } = require("./queries/channelTabsQuery");
 const { findCompany } = require("../models/companyModel");
 const { findUser } = require("../models/userModel");
-const { parse } = require("dotenv");
 
 exports.addMembersToChannelTab = async (req, res, next) => {
   try {
     const { channelId, assignments } = parseBody(req.body);
     const requestingUserId = req.user.id; // Get ID of user making the request
-
-    const validationError = validateRequiredFields(
-      { channelId, assignments },
-      res
-    );
-    if (validationError) return validationError;
 
     const channel = await findChannel({ _id: channelId });
     if (!channel)
@@ -143,8 +135,6 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
   try {
     const { channelId, page, limit } = req.query;
     const userId = req.user.id; // Get the current user's ID
-    const validationError = validateRequiredFields({ channelId }, res);
-    if (validationError) return validationError;
 
     const channel = await findChannel({ _id: channelId });
     if (!channel)
@@ -180,16 +170,6 @@ exports.getAllTabMembers = async (req, res, next) => {
   try {
     const { tabId } = req.params;
     const userId = req.user.id;
-
-    // Validate tabId
-    if (!tabId) {
-      return generateResponse(
-        null,
-        "Tab ID is required",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
-    }
 
     // Find the tab
     const tab = await findChannelTab({ _id: tabId });
@@ -246,22 +226,18 @@ exports.getAllTabMembers = async (req, res, next) => {
 exports.createNewChannelTab = async (req, res, next) => {
   try {
     const { tabName, channelId, isPrivate } = parseBody(req.body);
-    console.log(tabName, channelId, isPrivate);
-    const validationError = validateRequiredFields(
-      { tabName, channelId, isPrivate },
-      res
-    );
-    if (validationError) return validationError;
     const userId = req.user.id;
-    // find channnel
+
+    // find channel
     const channel = await findChannel({ _id: channelId });
     if (!channel)
       return generateResponse(
         null,
-        "channel not found",
+        "Channel not found",
         res,
         STATUS_CODES.NOT_FOUND
       );
+
     // create channel tab
     const channelTabBody = {
       channelId,
@@ -274,7 +250,7 @@ exports.createNewChannelTab = async (req, res, next) => {
     const newChannelTab = await createChannelTab(channelTabBody);
     return generateResponse(
       newChannelTab,
-      "new channel tab successfully created",
+      "New channel tab successfully created",
       res,
       STATUS_CODES.CREATED
     );
