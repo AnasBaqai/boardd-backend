@@ -9,7 +9,6 @@ const {
 } = require("../models/channelModel");
 const { generateResponse } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
-const { validateRequiredFields } = require("./helpers/users/signup.helper");
 const { createChannelTab } = require("../models/channelTabsModel");
 const {
   createDefaultTabs,
@@ -23,15 +22,6 @@ const { findCompany } = require("../models/companyModel");
 exports.createChannel = async (req, res, next) => {
   try {
     const { channelName, channelDescription, isPrivate } = parseBody(req.body);
-    const validationError = validateRequiredFields(
-      {
-        channelName,
-        channelDescription,
-        isPrivate,
-      },
-      res
-    );
-    if (validationError) return validationError;
 
     const userId = req.user.id;
     const user = await findUser({ _id: userId });
@@ -64,13 +54,6 @@ exports.createChannel = async (req, res, next) => {
 exports.getChannelJoiningLink = async (req, res, next) => {
   try {
     const { channelId } = req.query;
-    const validationError = validateRequiredFields(
-      {
-        channelId,
-      },
-      res
-    );
-    if (validationError) return validationError;
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
@@ -102,15 +85,6 @@ exports.addUserToChannel = async (req, res, next) => {
   try {
     const { email, channelToken } = parseBody(req.body);
     const requestingUserId = req.user.id; // Get ID of user making the request
-
-    const validationError = validateRequiredFields(
-      {
-        email,
-        channelToken,
-      },
-      res
-    );
-    if (validationError) return validationError;
 
     const channel = await findChannel({ channelToken });
     if (!channel) {
@@ -204,15 +178,7 @@ exports.addUserToChannel = async (req, res, next) => {
 // get all members in  channel
 exports.getAllMembersInChannel = async (req, res, next) => {
   try {
-    const { channelId } = req.query;
-    const { page, limit } = req.query;
-    const validationError = validateRequiredFields(
-      {
-        channelId,
-      },
-      res
-    );
-    if (validationError) return validationError;
+    const { channelId, page, limit } = req.query;
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {

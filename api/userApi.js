@@ -11,9 +11,7 @@ const Auth = require("../middlewares/Auth");
 const {
   validateSignup,
   validateLogin,
-  validateGetUsersQuery,
 } = require("../validation/userValidation");
-const { validateTokenQuery } = require("../validation/authValidation");
 
 class UserAPI {
   constructor() {
@@ -31,12 +29,7 @@ class UserAPI {
     router.post("/login", validateLogin, login);
 
     // Get users with query validation
-    router.get(
-      "/",
-      Auth([ROLES.ADMIN]),
-      validateGetUsersQuery,
-      getUsersOfCompany
-    );
+    router.get("/", Auth([ROLES.ADMIN]), getUsersOfCompany);
   }
 
   getRouter() {

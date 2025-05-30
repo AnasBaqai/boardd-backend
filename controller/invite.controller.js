@@ -1,7 +1,7 @@
 "use strict";
 
 // get unused invite slot for the company
-const { generateResponse } = require("../utils");
+const { generateResponse, parseBody } = require("../utils");
 const { STATUS_CODES, ROLES } = require("../utils/constants");
 const { findCompany } = require("../models/companyModel");
 const {
@@ -25,9 +25,10 @@ const { findUser } = require("../models/userModel");
  */
 exports.getUnusedInviteSlot = async (req, res, next) => {
   try {
-    const { joinToken } = req?.query;
+    const { joinToken } = req.query;
     const adminUserId = req.user.id;
     const adminUser = await findUser({ _id: adminUserId });
+
     // Find company by joinToken or admin's company ID
     let company;
     if (joinToken) {
@@ -99,22 +100,8 @@ const checkEmailAlreadyInvited = async (email, companyId) => {
  */
 exports.sendBulkInvites = async (req, res, next) => {
   try {
-    const { invites } = req.body;
+    const { invites } = parseBody(req.body);
     const adminUser = req.user;
-
-    // Validate input
-    if (
-      !invites ||
-      typeof invites !== "object" ||
-      Object.keys(invites).length === 0
-    ) {
-      return generateResponse(
-        null,
-        "Please provide a valid invites object with email:role pairs",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
-    }
 
     // Find admin's company
     const company = await findCompany({ adminUser: adminUser.id });
@@ -151,16 +138,6 @@ exports.sendBulkInvites = async (req, res, next) => {
 
     for (const [email, role] of Object.entries(invites)) {
       try {
-        // Validate role
-        const validRole = role === ROLES.ADMIN || role === ROLES.EMPLOYEE;
-        if (!validRole) {
-          results.failed.push({
-            email,
-            reason: `Invalid role: ${role}. Must be admin or employee.`,
-          });
-          continue;
-        }
-
         // Check if email already has a reserved slot
         const alreadyInvited = await checkEmailAlreadyInvited(
           email,
