@@ -1,7 +1,7 @@
 const nodeMailer = require("nodemailer");
 
 class Mailer {
-  static async sendEmail({ email, subject, message, html }) {
+  static async sendEmail({ email, subject, message, html, replyTo }) {
     const transporter = nodeMailer.createTransport({
       service: "gmail",
       auth: {
@@ -11,11 +11,12 @@ class Mailer {
     });
 
     const mailOptions = {
-      from: process.env.EMAIL,
+      from: `Boardd <${process.env.EMAIL}>`, // Professional styling with Gmail
       to: email,
       subject,
       text: message,
       html: html || undefined, // Include HTML content if provided
+      replyTo: replyTo || process.env.EMAIL, // Allow custom reply-to address
     };
 
     try {

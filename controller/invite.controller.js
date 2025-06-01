@@ -168,7 +168,7 @@ exports.sendBulkInvites = async (req, res, next) => {
 
         // Create invite link
         const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-        const inviteLink = `${baseUrl}/signup?companyId=${company.domain}&token=${inviteToken}`;
+        const inviteLink = `${baseUrl}/signin?companyId=${company.domain}&token=${inviteToken}`;
 
         // Prepare email content using the template
         const subject = `Invitation to join ${company.name}`;
@@ -176,6 +176,8 @@ exports.sendBulkInvites = async (req, res, next) => {
           companyName: company.name,
           role,
           inviteLink,
+          adminName: adminUser.name,
+          adminEmail: adminUser.email,
         });
 
         // Send email
@@ -184,6 +186,7 @@ exports.sendBulkInvites = async (req, res, next) => {
           subject,
           message: text,
           html: html,
+          replyTo: adminUser.email,
         });
 
         // Mark slot as reserved (not used yet)

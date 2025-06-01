@@ -235,7 +235,23 @@ exports.getUsersOfCompany = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const user = await findUser({ _id: userId });
+    if (!user) {
+      return generateResponse(
+        null,
+        "User not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
     const company = await findCompany({ _id: user.companyId });
+    if (!company) {
+      return generateResponse(
+        null,
+        "Company not found",
+        res,
+        STATUS_CODES.NOT_FOUND
+      );
+    }
 
     // Build query to get users of particular company with the matching name
     let queryArray = [];

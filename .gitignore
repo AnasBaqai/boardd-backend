@@ -20,3 +20,5 @@ package-lock.json
 
 /uploads
 uploadFiles
+
+docker-compose.yml
