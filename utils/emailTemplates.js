@@ -20,7 +20,7 @@ exports.generateInviteEmail = ({
   adminEmail,
 }) => {
   const baseUrl = process.env.BACKEND_URL;
-  const logoUrl = `${baseUrl}/assets/images/boardd-logo.svg`;
+  const logoUrl = `${baseUrl}/assets/images/boardd-logo.png`;
 
   // HTML email with modern professional styling
   const html = `
@@ -306,7 +306,7 @@ exports.generateInviteEmail = ({
         The ${companyName} Team
       </div>
       <div class="footer-branding">
-        Powered by <a href="https://boardd.com">Boardd</a>
+        Powered by <a href="${process.env.FRONTEND_URL}">Boardd</a>
       </div>
     </div>
   </div>
