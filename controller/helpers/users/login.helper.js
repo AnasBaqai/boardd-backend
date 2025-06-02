@@ -52,7 +52,7 @@ exports.handleInviteSignup = async (
   }
 
   // Determine role based on reservation or default to USER
-  const role = inviteSlot.reservedRole || ROLES.USER;
+  const role = inviteSlot.reservedRole || ROLES.EMPLOYEE;
 
   // Create new user with active status
   const hashedPassword = await hashPassword(password);
@@ -86,7 +86,7 @@ exports.handlePublicSignup = async (name, email, password, company, res) => {
     password: hashedPassword,
     companyId: company._id,
     isActive: true, // Public link users are active by default
-    role: ROLES.USER, // Default role for public signups
+    role: ROLES.EMPLOYEE, // Default role for public signups
   });
 
   // Generate and update refresh token

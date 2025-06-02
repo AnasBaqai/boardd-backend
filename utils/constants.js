@@ -1,8 +1,6 @@
 exports.ROLES = Object.freeze({
-  USER: "user",
   ADMIN: "admin",
   EMPLOYEE: "employee",
-  ORGANIZATION: "organization",
 });
 
 exports.WORK_TYPE = Object.freeze({
