@@ -20,7 +20,7 @@ const io = initSocket(server);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true, limit: "30mb" }));
-app.use("/uploads", express.static("uploads"));
+app.use("/uploadFiles", express.static("uploadFiles"));
 app.use("/assets", express.static("assets"));
 app.use(
   cookieSession({
