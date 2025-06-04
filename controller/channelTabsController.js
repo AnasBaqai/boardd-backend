@@ -22,32 +22,26 @@ exports.addMembersToChannelTab = async (req, res, next) => {
 
     const channel = await findChannel({ _id: channelId });
     if (!channel)
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
 
     // Check if requesting user is the channel creator
     if (channel.createdBy.toString() !== requestingUserId.toString()) {
-      return generateResponse(
-        null,
-        "Only channel creator can add members",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "Only channel creator can add members",
+      });
     }
 
     // Get company details for domain check
     const company = await findCompany({ _id: channel.companyId });
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     try {
@@ -118,15 +112,16 @@ exports.addMembersToChannelTab = async (req, res, next) => {
         STATUS_CODES.SUCCESS
       );
     } catch (error) {
-      return generateResponse(
-        null,
-        `Failed to add members: ${error.message}`,
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: `Failed to add members: ${error.message}`,
+      });
     }
   } catch (error) {
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -138,12 +133,10 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
 
     const channel = await findChannel({ _id: channelId });
     if (!channel)
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
 
     // Use the query to get only tabs where the user is a member
     const query = getAllTabsOfMemberInChannelQuery(channelId, userId);
@@ -161,7 +154,10 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
       STATUS_CODES.SUCCESS
     );
   } catch (error) {
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -174,22 +170,18 @@ exports.getAllTabMembers = async (req, res, next) => {
     // Find the tab
     const tab = await findChannelTab({ _id: tabId });
     if (!tab) {
-      return generateResponse(
-        null,
-        "Tab not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
     }
 
     // Check if the requesting user is a member of the tab
     if (!tab.members.includes(userId)) {
-      return generateResponse(
-        null,
-        "You are not a member of this tab",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You are not a member of this tab",
+      });
     }
 
     // Get all members with their details
@@ -202,12 +194,10 @@ exports.getAllTabMembers = async (req, res, next) => {
     });
 
     if (!result.tab.length) {
-      return generateResponse(
-        null,
-        "No members found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "No members found",
+      });
     }
 
     return generateResponse(
@@ -218,7 +208,10 @@ exports.getAllTabMembers = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getAllTabMembers:", error);
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -231,12 +224,10 @@ exports.createNewChannelTab = async (req, res, next) => {
     // find channel
     const channel = await findChannel({ _id: channelId });
     if (!channel)
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
 
     // create channel tab
     const channelTabBody = {
@@ -255,6 +246,9 @@ exports.createNewChannelTab = async (req, res, next) => {
       STATUS_CODES.CREATED
     );
   } catch (err) {
-    next(err);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: err?.message,
+    });
   }
 };

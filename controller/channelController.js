@@ -57,12 +57,10 @@ exports.getChannelJoiningLink = async (req, res, next) => {
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
     const joiningLink = `${
       process.env.FRONTEND_URL || "http://localhost:3000"
@@ -76,7 +74,10 @@ exports.getChannelJoiningLink = async (req, res, next) => {
     );
   } catch (error) {
     console.log(error);
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -88,74 +89,60 @@ exports.addUserToChannel = async (req, res, next) => {
 
     const channel = await findChannel({ channelToken });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
 
     // Check if requesting user is the channel creator
     if (channel.createdBy.toString() !== requestingUserId.toString()) {
-      return generateResponse(
-        null,
-        "Only channel creator can add members",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "Only channel creator can add members",
+      });
     }
 
     const user = await findUser({ email });
     if (!user) {
-      return generateResponse(
-        null,
-        "User not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
     }
 
     // Check if user is active
     if (!user.isActive) {
-      return generateResponse(
-        null,
-        "Cannot add inactive user to channel",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "Cannot add inactive user to channel",
+      });
     }
 
     // check if user is already a member of the channel
     if (channel?.members?.includes(user._id)) {
-      return generateResponse(
-        null,
-        "User already a member of the channel",
-        res,
-        STATUS_CODES.CONFLICT
-      );
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "User already a member of the channel",
+      });
     }
 
     // Get company details for domain check
     const company = await findCompany({ _id: channel.companyId });
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     // Check if user's email domain matches company domain
     const userDomain = email.split("@")[1];
     if (userDomain !== company.domain) {
-      return generateResponse(
-        null,
-        "User's email domain does not match company domain",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "User's email domain does not match company domain",
+      });
     }
 
     // add user to the channel
@@ -171,7 +158,10 @@ exports.addUserToChannel = async (req, res, next) => {
     );
   } catch (error) {
     console.log(error);
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -183,12 +173,10 @@ exports.getAllMembersInChannel = async (req, res, next) => {
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
 
     const membersQuery = getAllMembersInChannelQuery(channelId, currentUserId);
@@ -207,7 +195,10 @@ exports.getAllMembersInChannel = async (req, res, next) => {
     );
   } catch (error) {
     console.log(error);
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -233,6 +224,9 @@ exports.getAllChannelsOfUser = async (req, res, next) => {
     );
   } catch (error) {
     console.log(error);
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

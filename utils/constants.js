@@ -69,6 +69,7 @@ exports.STATUS_CODES = Object.freeze({
   CONFLICT: 409,
   UNPROCESSABLE_ENTITY: 422,
   INTERNAL_SERVER_ERROR: 500,
+  PARTIAL_CONTENT: 206,
 });
 
 exports.PRIVACY = Object.freeze({

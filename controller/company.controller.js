@@ -9,12 +9,10 @@ exports.getCompany = async (req, res, next) => {
     if (joinToken) {
       const company = await findCompany({ joinToken });
       if (!company) {
-        return generateResponse(
-          null,
-          "Company not found with this join token",
-          res,
-          STATUS_CODES.NOT_FOUND
-        );
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: "Company not found with this join token",
+        });
       }
       return generateResponse(
         company,
@@ -27,12 +25,10 @@ exports.getCompany = async (req, res, next) => {
     if (companyId) {
       const company = await findCompany({ _id: companyId });
       if (!company) {
-        return generateResponse(
-          null,
-          "Company not found with this ID",
-          res,
-          STATUS_CODES.NOT_FOUND
-        );
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: "Company not found",
+        });
       }
       return generateResponse(
         company,
@@ -42,14 +38,15 @@ exports.getCompany = async (req, res, next) => {
       );
     }
 
-    return generateResponse(
-      null,
-      "Company not found",
-      res,
-      STATUS_CODES.NOT_FOUND
-    );
-  } catch (err) {
-    return next(err);
+    return next({
+      statusCode: STATUS_CODES.NOT_FOUND,
+      message: "Company not found",
+    });
+  } catch (error) {
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -62,12 +59,10 @@ exports.updateCompany = async (req, res, next) => {
     // find company
     const company = await findCompany({ _id: companyId });
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     // update company
@@ -79,6 +74,9 @@ exports.updateCompany = async (req, res, next) => {
       STATUS_CODES.SUCCESS
     );
   } catch (err) {
-    return next(err);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: err?.message,
+    });
   }
 };

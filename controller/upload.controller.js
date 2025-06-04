@@ -3,41 +3,6 @@ const { STATUS_CODES } = require("../utils/constants");
 const fs = require("fs");
 const path = require("path");
 
-// /**
-//  * Upload single file
-//  * @route POST /api/upload
-//  */
-// exports.uploadSingleFile = async (req, res, next) => {
-//   try {
-//     if (!req.file) {
-//       return generateResponse(
-//         null,
-//         "No file uploaded",
-//         res,
-//         STATUS_CODES.BAD_REQUEST
-//       );
-//     }
-
-//     // Get the file path that was set in the multer middleware
-//     const filePath = req.filepath;
-
-//     // Return the file path
-//     return generateResponse(
-//       { filePath },
-//       "File uploaded successfully",
-//       res,
-//       STATUS_CODES.SUCCESS
-//     );
-//   } catch (error) {
-//     // If there's an error, clean up any uploaded file
-//     if (req.file) {
-//       fs.unlinkSync(req.file.path);
-//     }
-//     console.error("Error in uploadSingleFile:", error);
-//     next(error);
-//   }
-// };
-
 /**
  * Upload multiple files
  * @route POST /api/upload/multiple
@@ -45,12 +10,10 @@ const path = require("path");
 exports.uploadMultipleFiles = async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return generateResponse(
-        null,
-        "No files uploaded",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "No file uploaded",
+      });
     }
 
     // Get all file paths
@@ -76,7 +39,10 @@ exports.uploadMultipleFiles = async (req, res, next) => {
       });
     }
     console.error("Error in uploadMultipleFiles:", error);
-    next(error);
+    next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -90,12 +56,10 @@ exports.deleteFiles = async (req, res, next) => {
 
     // Validate files parameter
     if (!files) {
-      return generateResponse(
-        null,
-        "No files specified for deletion",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "No files specified for deletion",
+      });
     }
 
     // Convert to array if single file path is provided
@@ -166,11 +130,14 @@ exports.deleteFiles = async (req, res, next) => {
         results,
         "Some files were deleted successfully",
         res,
-        STATUS_CODES.PARTIAL_CONTENT
+        STATUS_CODES.SUCCESS
       );
     }
   } catch (error) {
     console.error("Error in deleteFiles:", error);
-    next(error);
+    next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

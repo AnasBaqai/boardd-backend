@@ -2,7 +2,7 @@
 
 // get unused invite slot for the company
 const { generateResponse, parseBody } = require("../utils");
-const { STATUS_CODES, ROLES } = require("../utils/constants");
+const { STATUS_CODES } = require("../utils/constants");
 const { findCompany } = require("../models/companyModel");
 const {
   findInviteSlot,
@@ -10,7 +10,6 @@ const {
   findAvailableInviteSlot,
 } = require("../models/inviteSlotModel");
 const Mailer = require("../utils/mailer");
-const crypto = require("crypto");
 const { generateInviteEmail } = require("../utils/emailTemplates");
 const { findUser } = require("../models/userModel");
 
@@ -38,12 +37,10 @@ exports.getUnusedInviteSlot = async (req, res, next) => {
     }
 
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     // Find unused and unreserved invite slot for the company
@@ -52,12 +49,10 @@ exports.getUnusedInviteSlot = async (req, res, next) => {
     });
 
     if (!unusedInviteSlot) {
-      return generateResponse(
-        null,
-        "No unused invite slots available",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "No unused invite slots available",
+      });
     }
 
     // Generate hashmap for invite links
@@ -75,7 +70,10 @@ exports.getUnusedInviteSlot = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getUnusedInviteSlot:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -106,12 +104,10 @@ exports.sendBulkInvites = async (req, res, next) => {
     // Find admin's company
     const company = await findCompany({ adminUser: adminUser.id });
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     // Count total invites needed
@@ -122,12 +118,10 @@ exports.sendBulkInvites = async (req, res, next) => {
       companyId: company._id,
     });
     if (!availableSlots) {
-      return generateResponse(
-        null,
-        "No available invite slots. Please upgrade your plan.",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "No available invite slots. Please upgrade your plan.",
+      });
     }
 
     // Process each invite
@@ -204,31 +198,28 @@ exports.sendBulkInvites = async (req, res, next) => {
 
     // Return results
     if (results.successful.length === 0) {
-      return generateResponse(
-        { results },
-        "Failed to send any invites",
-        res,
-        STATUS_CODES.UNPROCESSABLE_ENTITY
-      );
+      return next({
+        statusCode: STATUS_CODES.UNPROCESSABLE_ENTITY,
+        message: "Failed to send any invites",
+      });
     }
 
     if (results.failed.length > 0) {
-      return generateResponse(
-        { results },
-        `Successfully sent ${results.successful.length} invites with ${results.failed.length} failures`,
-        res,
-        STATUS_CODES.PARTIAL_CONTENT || 206 // Using 206 Partial Content for partial success
-      );
+      return next({
+        statusCode: STATUS_CODES.PARTIAL_CONTENT,
+        message: `Successfully sent ${results.successful.length} invites with ${results.failed.length} failures`,
+      });
     }
 
-    return generateResponse(
-      { results },
-      `Successfully sent all ${results.successful.length} invites`,
-      res,
-      STATUS_CODES.SUCCESS
-    );
+    return next({
+      statusCode: STATUS_CODES.SUCCESS,
+      message: `Successfully sent all ${results.successful.length} invites`,
+    });
   } catch (error) {
     console.error("Error in sendBulkInvites:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

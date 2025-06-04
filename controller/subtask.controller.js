@@ -10,9 +10,7 @@ const {
   findSubtask,
   updateSubtask,
   deleteSubtask,
-  getAllSubtasks,
 } = require("../models/subtaskModel");
-const { getIO } = require("../utils/socket");
 const { emitTaskEvent } = require("../utils/socket");
 const { createActivity } = require("../models/activityModel");
 const { findChannelTab } = require("../models/channelTabsModel");
@@ -30,56 +28,46 @@ exports.createSubtask = async (req, res, next) => {
     // Check if task exists
     const task = await findTask({ _id: taskId });
     if (!task) {
-      return generateResponse(
-        null,
-        "Task not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Task not found",
+      });
     }
 
     // Check if project exists
     const project = await findProject({ _id: task.projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     // Get creator's info
     const userId = req.user.id;
     const creator = await findUser({ _id: userId });
     if (!creator) {
-      return generateResponse(
-        null,
-        "User not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
     }
 
     // Get tab and channel info for context
     const tab = await findChannelTab({ _id: project.tabId });
     if (!tab) {
-      return generateResponse(
-        null,
-        "Tab not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
     }
 
     const channel = await findChannel({ _id: project.channelId });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
 
     // Create subtask object
@@ -213,7 +201,10 @@ exports.createSubtask = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in createSubtask:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -229,23 +220,19 @@ exports.updateSubtask = async (req, res, next) => {
     // Find subtask
     const subtask = await findSubtask({ _id: subtaskId });
     if (!subtask) {
-      return generateResponse(
-        null,
-        "Subtask not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Subtask not found",
+      });
     }
 
     // Get project for context
     const project = await findProject({ _id: subtask.projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     // Capture previous values for activity tracking
@@ -316,7 +303,10 @@ exports.updateSubtask = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in updateSubtask:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -331,23 +321,19 @@ exports.deleteSubtask = async (req, res, next) => {
     // Find subtask
     const subtask = await findSubtask({ _id: subtaskId });
     if (!subtask) {
-      return generateResponse(
-        null,
-        "Subtask not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Subtask not found",
+      });
     }
 
     // Get project for context
     const project = await findProject({ _id: subtask.projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     // Create activity record
@@ -386,6 +372,9 @@ exports.deleteSubtask = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in deleteSubtask:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

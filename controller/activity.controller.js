@@ -20,12 +20,10 @@ exports.getProjectActivities = async (req, res, next) => {
     // Check if project exists
     const project = await findProject({ _id: projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     // Check if user has access to project
@@ -46,7 +44,10 @@ exports.getProjectActivities = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getProjectActivities:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -61,12 +62,10 @@ exports.getTaskActivities = async (req, res, next) => {
     // Check if task exists
     const task = await findTask({ _id: taskId });
     if (!task) {
-      return generateResponse(
-        null,
-        "Task not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Task not found",
+      });
     }
 
     // Get activities
@@ -84,7 +83,10 @@ exports.getTaskActivities = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getTaskActivities:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 

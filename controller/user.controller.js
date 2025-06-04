@@ -44,24 +44,20 @@ exports.signup = async (req, res, next) => {
     // Check if user exists
     const existingUser = await findUser({ email });
     if (existingUser) {
-      return generateResponse(
-        null,
-        "Admin already exists",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "User already exists",
+      });
     }
 
     // Check if company exists
     const domain = email.split("@")[1];
     const existingCompany = await findCompany({ domain });
     if (existingCompany) {
-      return generateResponse(
-        null,
-        "Company already exists",
-        res,
-        STATUS_CODES.BAD_REQUEST
-      );
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "Company already exists",
+      });
     }
 
     // Create user with hashed password
@@ -101,7 +97,10 @@ exports.signup = async (req, res, next) => {
     );
   } catch (error) {
     console.log(error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -115,24 +114,20 @@ exports.login = async (req, res, next) => {
       // Validate invite token and get company
       const inviteSlot = await findInviteSlot({ token });
       if (!inviteSlot || inviteSlot?.used) {
-        return generateResponse(
-          null,
-          inviteSlot?.used
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: inviteSlot?.used
             ? "Invite slot already used"
             : "Invite slot not found",
-          res,
-          STATUS_CODES.NOT_FOUND
-        );
+        });
       }
 
       const company = await findCompany({ _id: inviteSlot?.companyId });
       if (!company) {
-        return generateResponse(
-          null,
-          "Company not found",
-          res,
-          STATUS_CODES.NOT_FOUND
-        );
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: "Company not found",
+        });
       }
 
       // Handle invite signup and mark slot as used
@@ -155,23 +150,19 @@ exports.login = async (req, res, next) => {
       // Find company by joinToken
       const company = await findCompany({ joinToken });
       if (!company) {
-        return generateResponse(
-          null,
-          "Invalid join link",
-          res,
-          STATUS_CODES.NOT_FOUND
-        );
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: "Company not found",
+        });
       }
 
       // Check if user with this email already exists
       const existingUser = await findUser({ email });
       if (existingUser) {
-        return generateResponse(
-          null,
-          "User with this email already exists",
-          res,
-          STATUS_CODES.CONFLICT
-        );
+        return next({
+          statusCode: STATUS_CODES.CONFLICT,
+          message: "User already exists",
+        });
       }
 
       // Find an available invite slot
@@ -179,12 +170,10 @@ exports.login = async (req, res, next) => {
         companyId: company._id,
       });
       if (!availableSlot) {
-        return generateResponse(
-          null,
-          "No available seats for this company. Please contact the administrator.",
-          res,
-          STATUS_CODES.FORBIDDEN
-        );
+        return next({
+          statusCode: STATUS_CODES.NOT_FOUND,
+          message: "No available invite slot found",
+        });
       }
 
       // Handle public signup and mark slot as used
@@ -218,14 +207,15 @@ exports.login = async (req, res, next) => {
     }
 
     // No matching company domain
-    return generateResponse(
-      null,
-      "Invalid email domain or user not found",
-      res,
-      STATUS_CODES.NOT_FOUND
-    );
+    return next({
+      statusCode: STATUS_CODES.NOT_FOUND,
+      message: "No matching company domain",
+    });
   } catch (error) {
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -237,22 +227,18 @@ exports.getUsersOfCompany = async (req, res, next) => {
     const userId = req.user.id;
     const user = await findUser({ _id: userId });
     if (!user) {
-      return generateResponse(
-        null,
-        "User not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
     }
 
     const company = await findCompany({ _id: user.companyId });
     if (!company) {
-      return generateResponse(
-        null,
-        "Company not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
     }
 
     // Get the aggregation query from userQueries
@@ -281,6 +267,9 @@ exports.getUsersOfCompany = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getUsersOfCompany:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

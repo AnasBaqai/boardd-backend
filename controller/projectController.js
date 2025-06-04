@@ -13,12 +13,10 @@ exports.CreateProject = async (req, res, next) => {
     // check if tabId is valid
     const tab = await findChannelTab({ _id: tabId });
     if (!tab) {
-      return generateResponse(
-        null,
-        "Tab not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
     }
     const companyId = tab?.companyId;
     const channelId = tab?.channelId;
@@ -44,6 +42,9 @@ exports.CreateProject = async (req, res, next) => {
       STATUS_CODES.SUCCESS
     );
   } catch (error) {
-    next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };

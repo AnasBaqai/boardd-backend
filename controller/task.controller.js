@@ -4,14 +4,7 @@ const { parseBody, generateResponse } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
 const { findUser } = require("../models/userModel");
 const { findProject } = require("../models/projectModel");
-const {
-  createTask,
-  findTask,
-  updateTask,
-  deleteTask,
-} = require("../models/taskModel");
-const { getTaskActivities } = require("../models/activityModel");
-const { getIO } = require("../utils/socket");
+const { createTask, findTask, updateTask } = require("../models/taskModel");
 const { createActivity } = require("../models/activityModel");
 const { createNotification } = require("../models/notificationModel");
 const { findChannelTab } = require("../models/channelTabsModel");
@@ -40,44 +33,36 @@ exports.createTask = async (req, res, next) => {
     // Check if project exists and get context
     const project = await findProject({ _id: projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     // Check if user is a member of the tab
     const userId = req?.user?.id;
     const tab = await findChannelTab({ _id: project.tabId });
     if (!tab) {
-      return generateResponse(
-        null,
-        "Tab not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
     }
     const isMember = tab?.members?.includes(userId);
     if (!isMember) {
-      return generateResponse(
-        null,
-        "You are not a member of this tab",
-        res,
-        STATUS_CODES.FORBIDDEN
-      );
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You are not a member of this tab",
+      });
     }
 
     // Get creator's info
     const creator = await findUser({ _id: userId });
     if (!creator) {
-      return generateResponse(
-        null,
-        "User not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
     }
 
     // Create task
@@ -93,12 +78,10 @@ exports.createTask = async (req, res, next) => {
     // Find channel
     const channel = await findChannel({ _id: project.channelId });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
 
     const contextPath = `${channel.channelName} / ${tab.tabName}`;
@@ -212,7 +195,10 @@ exports.createTask = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in createTask:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -232,12 +218,10 @@ exports.getTaskById = async (req, res, next) => {
     });
 
     if (!result.task.length) {
-      return generateResponse(
-        null,
-        "Task not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Task not found",
+      });
     }
 
     return generateResponse(
@@ -248,7 +232,10 @@ exports.getTaskById = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in getTaskById:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
 
@@ -264,54 +251,44 @@ exports.batchUpdateTask = async (req, res, next) => {
     // Find task
     const task = await findTask({ _id: taskId });
     if (!task) {
-      return generateResponse(
-        null,
-        "Task not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Task not found",
+      });
     }
 
     // Get project and user info
     const project = await findProject({ _id: task.projectId });
     if (!project) {
-      return generateResponse(
-        null,
-        "Project not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
     }
 
     const user = await findUser({ _id: userId });
     if (!user) {
-      return generateResponse(
-        null,
-        "User not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
     }
 
     // Get tab and channel info for context
     const tab = await findChannelTab({ _id: project.tabId });
     if (!tab) {
-      return generateResponse(
-        null,
-        "Tab not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
     }
 
     const channel = await findChannel({ _id: project.channelId });
     if (!channel) {
-      return generateResponse(
-        null,
-        "Channel not found",
-        res,
-        STATUS_CODES.NOT_FOUND
-      );
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
     }
 
     // Store previous values for activity tracking
@@ -465,6 +442,9 @@ exports.batchUpdateTask = async (req, res, next) => {
     );
   } catch (error) {
     console.error("Error in batchUpdateTask:", error);
-    return next(error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message,
+    });
   }
 };
