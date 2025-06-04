@@ -92,7 +92,7 @@ exports.getAllChannelsOfUserQuery = (userId) => {
 };
 
 // get all members in a channel
-exports.getAllMembersInChannelQuery = (channelId) => {
+exports.getAllMembersInChannelQuery = (channelId, currentUserId) => {
   return [
     {
       $match: {
@@ -113,6 +113,19 @@ exports.getAllMembersInChannelQuery = (channelId) => {
                   { $eq: ["$isDemo", true] }, // Always include demo users
                 ],
               },
+            },
+          },
+          {
+            // Exclude current logged-in user but keep demo users
+            $match: {
+              $or: [
+                {
+                  _id: {
+                    $ne: Types.ObjectId.createFromHexString(currentUserId),
+                  },
+                },
+                { isDemo: true },
+              ],
             },
           },
           {

@@ -179,6 +179,7 @@ exports.addUserToChannel = async (req, res, next) => {
 exports.getAllMembersInChannel = async (req, res, next) => {
   try {
     const { channelId, page, limit } = req.query;
+    const currentUserId = req.user.id; // Get current user ID
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
@@ -189,13 +190,15 @@ exports.getAllMembersInChannel = async (req, res, next) => {
         STATUS_CODES.NOT_FOUND
       );
     }
-    const membersQuery = getAllMembersInChannelQuery(channelId);
+
+    const membersQuery = getAllMembersInChannelQuery(channelId, currentUserId);
     const result = await getAllChannelsDetails({
       query: membersQuery,
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
       responseKey: "channel",
     });
+
     return generateResponse(
       result,
       "Members fetched successfully",
