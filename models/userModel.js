@@ -31,6 +31,7 @@ const userSchema = new Schema(
     image: { type: String },
     role: { type: String, default: "employee", enum: Object.values(ROLES) },
     isActive: { type: Boolean, default: true },
+    isDemo: { type: Boolean, default: false },
     fcmToken: { type: String },
     refreshToken: { type: String },
   },

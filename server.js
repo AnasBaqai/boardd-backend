@@ -7,11 +7,29 @@ const cookieSession = require("cookie-session");
 const { notFound, errorHandler } = require("./middlewares/errorHandling");
 const { log } = require("./middlewares/log");
 const { initSocket } = require("./utils/socket");
+const migrationRunner = require("./utils/migrationRunner");
 require("dotenv").config();
 const PORT = process.env.PORT;
 
 const app = express();
-DB_CONNECT();
+
+// Database connection and migrations
+const initializeApp = async () => {
+  try {
+    // Connect to database
+    await DB_CONNECT();
+    console.log("✅ Database connected successfully");
+
+    // Run pending migrations
+    const migrationResult = await migrationRunner.runPendingMigrations();
+    if (migrationResult.executed > 0) {
+      console.log(`✅ Executed ${migrationResult.executed} migrations`);
+    }
+  } catch (error) {
+    console.error("❌ App initialization failed:", error);
+    process.exit(1); // Exit if critical initialization fails
+  }
+};
 
 const server = http.createServer(app);
 
@@ -38,7 +56,15 @@ new API(app).registerGroups();
 app.use(notFound);
 app.use(errorHandler);
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}/`);
-  console.log(`Socket.io initialized and listening for connections`);
-});
+// Initialize app and start server
+initializeApp()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}/`);
+      console.log(`🔌 Socket.io initialized and listening for connections`);
+    });
+  })
+  .catch((error) => {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  });

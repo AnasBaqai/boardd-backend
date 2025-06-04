@@ -4,24 +4,34 @@ const { Types } = require("mongoose");
 exports.getCompanyUsersQuery = (companyId, currentUserId, searchTerm) => {
   let queryArray = [];
 
-  // Add company filter
+  // Match either company users OR the global demo user
   queryArray.push({
-    $match: { companyId: Types.ObjectId.createFromHexString(companyId) },
+    $match: {
+      $or: [
+        { companyId: Types.ObjectId.createFromHexString(companyId) },
+        { isDemo: true }, // Always include demo user
+      ],
+    },
   });
 
   // Add active users filter
   queryArray.push({ $match: { isActive: true } });
 
-  // Exclude the current logged-in user from results
+  // Exclude the current logged-in user from results (but keep demo user)
   queryArray.push({
-    $match: { _id: { $ne: Types.ObjectId.createFromHexString(currentUserId) } },
+    $match: {
+      $or: [
+        { _id: { $ne: Types.ObjectId.createFromHexString(currentUserId) } },
+        { isDemo: true },
+      ],
+    },
   });
 
   // Only add search logic if search term is provided
   if (searchTerm && searchTerm.trim() !== "") {
     const cleanSearchTerm = searchTerm.trim();
 
-    // Search for the term only in email
+    // Search for the term only in email (demo user will be filtered out if no match)
     queryArray.push({
       $match: {
         email: { $regex: cleanSearchTerm, $options: "i" },
@@ -77,9 +87,10 @@ exports.getCompanyUsersQuery = (companyId, currentUserId, searchTerm) => {
       },
     });
 
-    // Sort by score (descending) then by name (ascending)
+    // Sort by demo status first (demo users last), then by score, then by name
     queryArray.push({
       $sort: {
+        isDemo: 1, // Demo users appear last
         sortScore: -1,
         name: 1,
       },
@@ -93,9 +104,12 @@ exports.getCompanyUsersQuery = (companyId, currentUserId, searchTerm) => {
       },
     });
   } else {
-    // If no search term, just sort by name
+    // If no search term, sort by demo status first, then by name
     queryArray.push({
-      $sort: { name: 1 },
+      $sort: {
+        isDemo: 1, // Demo users appear last
+        name: 1,
+      },
     });
   }
 
@@ -108,6 +122,7 @@ exports.getCompanyUsersQuery = (companyId, currentUserId, searchTerm) => {
       role: 1,
       isActive: 1,
       companyId: 1,
+      isDemo: 1, // Include demo flag for frontend
     },
   });
 

@@ -12,8 +12,33 @@ exports.getAllChannelsOfUserQuery = (userId) => {
     {
       $lookup: {
         from: "users",
-        localField: "members",
-        foreignField: "_id",
+        let: { channelMembers: "$members" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $in: ["$_id", "$$channelMembers"] }, // Regular channel members
+                  { $eq: ["$isDemo", true] }, // Always include demo users
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              email: 1,
+              isDemo: 1,
+            },
+          },
+          {
+            $sort: {
+              isDemo: 1, // Demo users last
+              name: 1, // Then by name
+            },
+          },
+        ],
         as: "memberDetails",
       },
     },
@@ -40,7 +65,7 @@ exports.getAllChannelsOfUserQuery = (userId) => {
         channelToken: 1,
         createdAt: 1,
         updatedAt: 1,
-        totalMembers: { $size: "$members" },
+        totalMembers: { $size: "$memberDetails" }, // Updated to count all members including demo
         members: {
           $map: {
             input: "$memberDetails",
@@ -49,6 +74,7 @@ exports.getAllChannelsOfUserQuery = (userId) => {
               _id: "$$member._id",
               name: "$$member.name",
               email: "$$member.email",
+              isDemo: "$$member.isDemo",
             },
           },
         },
@@ -74,11 +100,32 @@ exports.getAllMembersInChannelQuery = (channelId) => {
       },
     },
     {
-      // Lookup users collection to get member details
+      // Lookup users collection to get member details + demo users
       $lookup: {
         from: "users",
-        localField: "members",
-        foreignField: "_id",
+        let: { channelMembers: "$members" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $in: ["$_id", "$$channelMembers"] }, // Regular channel members
+                  { $eq: ["$isDemo", true] }, // Always include demo users
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              email: 1,
+              role: 1,
+              isActive: 1,
+              isDemo: 1,
+            },
+          },
+        ],
         as: "memberDetails",
       },
     },
@@ -100,6 +147,9 @@ exports.getAllMembersInChannelQuery = (channelId) => {
           _id: "$memberDetails._id",
           name: "$memberDetails.name",
           email: "$memberDetails.email",
+          role: "$memberDetails.role",
+          isActive: "$memberDetails.isActive",
+          isDemo: "$memberDetails.isDemo",
         },
       },
     },
@@ -114,6 +164,20 @@ exports.getAllMembersInChannelQuery = (channelId) => {
         },
         members: {
           $push: "$member",
+        },
+      },
+    },
+    {
+      // Sort members: demo users last, then by name
+      $addFields: {
+        members: {
+          $sortArray: {
+            input: "$members",
+            sortBy: {
+              isDemo: 1, // Demo users appear last
+              name: 1, // Then sort by name
+            },
+          },
         },
       },
     },
