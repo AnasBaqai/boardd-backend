@@ -20,12 +20,29 @@ exports.addMembersToChannelTab = async (req, res, next) => {
     const { channelId, assignments } = parseBody(req.body);
     const requestingUserId = req.user.id; // Get ID of user making the request
 
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: requestingUserId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
     const channel = await findChannel({ _id: channelId });
     if (!channel)
       return next({
         statusCode: STATUS_CODES.NOT_FOUND,
         message: "Channel not found",
       });
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only manage tabs from channels in your own company",
+      });
+    }
 
     // Check if requesting user is the channel creator
     if (channel.createdBy.toString() !== requestingUserId.toString()) {
@@ -131,12 +148,29 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
     const { channelId, page, limit } = req.query;
     const userId = req.user.id; // Get the current user's ID
 
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: userId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
     const channel = await findChannel({ _id: channelId });
     if (!channel)
       return next({
         statusCode: STATUS_CODES.NOT_FOUND,
         message: "Channel not found",
       });
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only access tabs from channels in your own company",
+      });
+    }
 
     // Use the query to get only tabs where the user is a member
     const query = getAllTabsOfMemberInChannelQuery(channelId, userId);
@@ -167,12 +201,29 @@ exports.getAllTabMembers = async (req, res, next) => {
     const { tabId } = req.params;
     const userId = req.user.id;
 
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: userId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
     // Find the tab
     const tab = await findChannelTab({ _id: tabId });
     if (!tab) {
       return next({
         statusCode: STATUS_CODES.NOT_FOUND,
         message: "Tab not found",
+      });
+    }
+
+    // Security Check: Verify the tab belongs to the user's company
+    if (tab.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only access tabs from your own company",
       });
     }
 
@@ -221,6 +272,15 @@ exports.createNewChannelTab = async (req, res, next) => {
     const { tabName, channelId, isPrivate } = parseBody(req.body);
     const userId = req.user.id;
 
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: userId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
     // find channel
     const channel = await findChannel({ _id: channelId });
     if (!channel)
@@ -228,6 +288,14 @@ exports.createNewChannelTab = async (req, res, next) => {
         statusCode: STATUS_CODES.NOT_FOUND,
         message: "Channel not found",
       });
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only create tabs in channels from your own company",
+      });
+    }
 
     // create channel tab
     const channelTabBody = {

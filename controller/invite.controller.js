@@ -110,8 +110,30 @@ exports.sendBulkInvites = async (req, res, next) => {
       });
     }
 
-    // Count total invites needed
-    const totalInvites = Object.keys(invites).length;
+    // Validate all email domains before processing
+    const invalidDomainEmails = [];
+    for (const email of Object.keys(invites)) {
+      const emailDomain = email.split("@")[1];
+      if (emailDomain !== company.domain) {
+        invalidDomainEmails.push({
+          email,
+          expectedDomain: company.domain,
+          actualDomain: emailDomain,
+        });
+      }
+    }
+
+    // If any emails have invalid domains, reject the entire request
+    if (invalidDomainEmails.length > 0) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: `All invited emails must belong to your company domain (${company.domain})`,
+        data: {
+          invalidEmails: invalidDomainEmails,
+          validDomainExample: `user@${company.domain}`,
+        },
+      });
+    }
 
     // Check if enough slots are available
     const availableSlots = await findAvailableInviteSlot({

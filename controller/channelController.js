@@ -54,6 +54,16 @@ exports.createChannel = async (req, res, next) => {
 exports.getChannelJoiningLink = async (req, res, next) => {
   try {
     const { channelId } = req.query;
+    const currentUserId = req.user.id;
+
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: currentUserId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
 
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
@@ -62,6 +72,16 @@ exports.getChannelJoiningLink = async (req, res, next) => {
         message: "Channel not found",
       });
     }
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message:
+          "You can only get joining links for channels from your own company",
+      });
+    }
+
     const joiningLink = `${
       process.env.FRONTEND_URL || "http://localhost:3000"
     }/join-channel?token=${channel.channelToken}`;
@@ -171,11 +191,28 @@ exports.getAllMembersInChannel = async (req, res, next) => {
     const { channelId, page, limit } = req.query;
     const currentUserId = req.user.id; // Get current user ID
 
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: currentUserId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
       return next({
         statusCode: STATUS_CODES.NOT_FOUND,
         message: "Channel not found",
+      });
+    }
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only view members of channels from your own company",
       });
     }
 
