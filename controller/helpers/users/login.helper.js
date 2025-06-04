@@ -14,27 +14,24 @@ exports.handleInviteSignup = async (
   password,
   company,
   inviteSlot,
-  res
+  res,
+  next
 ) => {
   // Check if user with this email already exists
   const existingUser = await findUser({ email });
   if (existingUser) {
-    return generateResponse(
-      null,
-      "User with this email already exists",
-      res,
-      STATUS_CODES.CONFLICT
-    );
+    return next({
+      statusCode: STATUS_CODES.BAD_REQUEST,
+      message: "User already exists",
+    });
   }
 
   // Validate company domain
   if (company.domain !== email.split("@")[1]) {
-    return generateResponse(
-      null,
-      "Invalid company domain",
-      res,
-      STATUS_CODES.BAD_REQUEST
-    );
+    return next({
+      statusCode: STATUS_CODES.BAD_REQUEST,
+      message: "Invalid company domain",
+    });
   }
 
   // Check if the slot is reserved for a specific email
@@ -43,12 +40,10 @@ exports.handleInviteSignup = async (
     inviteSlot.reservedFor &&
     inviteSlot.reservedFor !== email
   ) {
-    return generateResponse(
-      null,
-      "This invite link is reserved for a different email address",
-      res,
-      STATUS_CODES.FORBIDDEN
-    );
+    return next({
+      statusCode: STATUS_CODES.BAD_REQUEST,
+      message: "This invite link is reserved for a different email address",
+    });
   }
 
   // Determine role based on reservation or default to USER
@@ -77,7 +72,14 @@ exports.handleInviteSignup = async (
   );
 };
 
-exports.handlePublicSignup = async (name, email, password, company, res) => {
+exports.handlePublicSignup = async (
+  name,
+  email,
+  password,
+  company,
+  res,
+  next
+) => {
   // Create new user with active status (since it's a public link)
   const hashedPassword = await hashPassword(password);
   let user = await createUser({
@@ -101,7 +103,14 @@ exports.handlePublicSignup = async (name, email, password, company, res) => {
   );
 };
 
-exports.handleDomainSignup = async (name, email, password, company, res) => {
+exports.handleDomainSignup = async (
+  name,
+  email,
+  password,
+  company,
+  res,
+  next
+) => {
   if (!name) {
     // assign name from email first part
     name = email.split("@")[0];
@@ -131,23 +140,19 @@ exports.handleDomainSignup = async (name, email, password, company, res) => {
   );
 };
 
-exports.handleRegularLogin = async (user, password, company, res) => {
+exports.handleRegularLogin = async (user, password, company, res, next) => {
   if (!user.isActive) {
-    return generateResponse(
-      null,
-      "Account is inactive. Please wait for admin approval.",
-      res,
-      STATUS_CODES.UNAUTHORIZED
-    );
+    return next({
+      statusCode: STATUS_CODES.UNAUTHORIZED,
+      message: "Account is inactive. Please wait for admin approval.",
+    });
   }
 
   if (!(await comparePassword(password, user.password))) {
-    return generateResponse(
-      null,
-      "Invalid password",
-      res,
-      STATUS_CODES.UNAUTHORIZED
-    );
+    return next({
+      statusCode: STATUS_CODES.UNAUTHORIZED,
+      message: "Invalid password",
+    });
   }
 
   // Generate and update refresh token

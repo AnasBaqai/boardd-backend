@@ -137,7 +137,8 @@ exports.login = async (req, res, next) => {
         password,
         company,
         inviteSlot,
-        res
+        res,
+        next
       );
       if (result.statusCode === STATUS_CODES.SUCCESS) {
         await updateInviteSlot({ _id: inviteSlot._id }, { used: true });
@@ -182,7 +183,8 @@ exports.login = async (req, res, next) => {
         email,
         password,
         company,
-        res
+        res,
+        next
       );
       if (result.statusCode === STATUS_CODES.SUCCESS) {
         await updateInviteSlot({ _id: availableSlot._id }, { used: true });
@@ -196,14 +198,14 @@ exports.login = async (req, res, next) => {
     if (existingUser) {
       const domain = email.split("@")[1];
       const company = await findCompany({ domain });
-      return handleRegularLogin(existingUser, password, company, res);
+      return handleRegularLogin(existingUser, password, company, res, next);
     }
 
     // Handle domain-based signup
     const domain = email.split("@")[1];
     const company = await findCompany({ domain });
     if (company) {
-      return handleDomainSignup(name, email, password, company, res);
+      return handleDomainSignup(name, email, password, company, res, next);
     }
 
     // No matching company domain
