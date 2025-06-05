@@ -38,7 +38,7 @@ exports.TOKEN_ERRORS = {
 exports.COOKIE_CONFIG = {
   REFRESH_TOKEN_NAME: "refreshToken",
   HTTP_ONLY: true,
-  SECURE: process.env.NODE_ENV === "production",
+  SECURE: process.env.NODE_ENV === "production" ? true : false,
   SAME_SITE: process.env.NODE_ENV === "production" ? "none" : "lax",
   MAX_AGE: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
   DOMAIN: undefined,
