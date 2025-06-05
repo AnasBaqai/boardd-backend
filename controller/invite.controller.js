@@ -227,16 +227,20 @@ exports.sendBulkInvites = async (req, res, next) => {
     }
 
     if (results.failed.length > 0) {
-      return next({
-        statusCode: STATUS_CODES.PARTIAL_CONTENT,
-        message: `Successfully sent ${results.successful.length} invites with ${results.failed.length} failures`,
-      });
+      return generateResponse(
+        results,
+        "Invites sent successfully",
+        res,
+        STATUS_CODES.PARTIAL_CONTENT
+      );
     }
 
-    return next({
-      statusCode: STATUS_CODES.SUCCESS,
-      message: `Successfully sent all ${results.successful.length} invites`,
-    });
+    return generateResponse(
+      results,
+      `Successfully sent all ${results.successful.length} invites`,
+      res,
+      STATUS_CODES.SUCCESS
+    );
   } catch (error) {
     console.error("Error in sendBulkInvites:", error);
     return next({
