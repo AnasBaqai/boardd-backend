@@ -54,9 +54,9 @@ app.use(
 const allowedOrigins = [
   "http://localhost:3000", // Local development
   "http://localhost:3001", // Alternative local port
-  "https://boarddd.ddns.net", // Production domain
+  "https://boarddd-frontend.vercel.app", // Production Vercel frontend
+  "https://boarddd.ddns.net", // Production backend domain
   "https://www.boarddd.ddns.net", // Production with www
-  "https://boarddd-frontend.vercel.app",
 ];
 
 app.use(

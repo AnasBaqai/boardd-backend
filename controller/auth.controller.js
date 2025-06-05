@@ -103,11 +103,18 @@ exports.logout = async (req, res, next) => {
     await updateUser({ _id: userId }, UPDATE_QUERIES.removeToken(refreshToken));
 
     // Clear the httpOnly cookie
-    res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, {
+    const clearOptions = {
       httpOnly: COOKIE_CONFIG.HTTP_ONLY,
       secure: COOKIE_CONFIG.SECURE,
       sameSite: COOKIE_CONFIG.SAME_SITE,
-    });
+    };
+
+    // Add domain if specified (for cross-domain support)
+    if (COOKIE_CONFIG.DOMAIN) {
+      clearOptions.domain = COOKIE_CONFIG.DOMAIN;
+    }
+
+    res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, clearOptions);
 
     return generateResponse(
       null,
@@ -132,11 +139,18 @@ exports.logoutAllDevices = async (req, res, next) => {
     await updateUser({ _id: userId }, UPDATE_QUERIES.removeAllTokens());
 
     // Clear the httpOnly cookie
-    res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, {
+    const clearOptions = {
       httpOnly: COOKIE_CONFIG.HTTP_ONLY,
       secure: COOKIE_CONFIG.SECURE,
       sameSite: COOKIE_CONFIG.SAME_SITE,
-    });
+    };
+
+    // Add domain if specified (for cross-domain support)
+    if (COOKIE_CONFIG.DOMAIN) {
+      clearOptions.domain = COOKIE_CONFIG.DOMAIN;
+    }
+
+    res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, clearOptions);
 
     return generateResponse(
       null,
@@ -232,11 +246,18 @@ exports.revokeSession = async (req, res, next) => {
     // If revoking current session, clear cookie
     const currentRefreshToken = req.cookies[COOKIE_CONFIG.REFRESH_TOKEN_NAME];
     if (currentRefreshToken === tokenToRevoke.token) {
-      res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, {
+      const clearOptions = {
         httpOnly: COOKIE_CONFIG.HTTP_ONLY,
         secure: COOKIE_CONFIG.SECURE,
         sameSite: COOKIE_CONFIG.SAME_SITE,
-      });
+      };
+
+      // Add domain if specified (for cross-domain support)
+      if (COOKIE_CONFIG.DOMAIN) {
+        clearOptions.domain = COOKIE_CONFIG.DOMAIN;
+      }
+
+      res.clearCookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, clearOptions);
     }
 
     return generateResponse(

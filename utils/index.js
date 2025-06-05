@@ -304,10 +304,17 @@ exports.generateActivityMessage = (field, userName, data) => {
 
 // Helper function to set refresh token cookie
 exports.setRefreshTokenCookie = (res, refreshToken) => {
-  res.cookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, refreshToken, {
+  const cookieOptions = {
     httpOnly: COOKIE_CONFIG.HTTP_ONLY,
     secure: COOKIE_CONFIG.SECURE,
     sameSite: COOKIE_CONFIG.SAME_SITE,
     maxAge: COOKIE_CONFIG.MAX_AGE,
-  });
+  };
+
+  // Add domain if specified (for cross-domain support)
+  if (COOKIE_CONFIG.DOMAIN) {
+    cookieOptions.domain = COOKIE_CONFIG.DOMAIN;
+  }
+
+  res.cookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, refreshToken, cookieOptions);
 };
