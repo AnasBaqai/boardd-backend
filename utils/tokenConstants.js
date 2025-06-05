@@ -39,7 +39,7 @@ exports.COOKIE_CONFIG = {
   REFRESH_TOKEN_NAME: "refreshToken",
   HTTP_ONLY: true,
   SECURE: process.env.NODE_ENV === "production", // Only secure in production
-  SAME_SITE: "strict",
+  SAME_SITE: "none",
   MAX_AGE: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
 };
 
