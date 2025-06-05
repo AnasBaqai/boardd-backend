@@ -4,6 +4,7 @@ const multer = require("multer");
 const fs = require("fs");
 const FCM = require("fcm-node");
 const { STATUS_CODES } = require("./constants");
+const { COOKIE_CONFIG } = require("./tokenConstants");
 const moment = require("moment");
 const path = require("path");
 
@@ -299,4 +300,14 @@ exports.generateActivityMessage = (field, userName, data) => {
         forOthers: `${userName} updated ${field} of "${taskTitle}"`,
       };
   }
+};
+
+// Helper function to set refresh token cookie
+exports.setRefreshTokenCookie = (res, refreshToken) => {
+  res.cookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, refreshToken, {
+    httpOnly: COOKIE_CONFIG.HTTP_ONLY,
+    secure: COOKIE_CONFIG.SECURE,
+    sameSite: COOKIE_CONFIG.SAME_SITE,
+    maxAge: COOKIE_CONFIG.MAX_AGE,
+  });
 };

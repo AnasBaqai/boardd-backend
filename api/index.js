@@ -4,6 +4,7 @@ const { Router } = require("express");
 
 const RootApi = require("./rootApi");
 const UserApi = require("./userApi");
+const AuthApi = require("./authApi");
 const InviteApi = require("./inviteApi");
 const CompanyApi = require("./companyApi");
 const ChannelApi = require("./channelApi");
@@ -25,6 +26,7 @@ class API {
   loadRouteGroups() {
     this.routeGroups.push(new RootApi());
     this.routeGroups.push(new UserApi());
+    this.routeGroups.push(new AuthApi());
     this.routeGroups.push(new InviteApi());
     this.routeGroups.push(new CompanyApi());
     this.routeGroups.push(new ChannelApi());

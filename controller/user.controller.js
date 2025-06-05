@@ -1,13 +1,24 @@
 "use strict";
 
 const { STATUS_CODES } = require("../utils/constants");
-const { generateResponse, parseBody } = require("../utils");
+const {
+  generateResponse,
+  parseBody,
+  setRefreshTokenCookie,
+} = require("../utils");
+const {
+  REFRESH_TOKEN,
+  COOKIE_CONFIG,
+  calculateRefreshTokenExpiry,
+} = require("../utils/tokenConstants");
 const {
   findUser,
   createUser,
   generateToken,
+  generateRefreshToken,
   updateUser,
   getAllUsers,
+  addRefreshToken,
 } = require("../models/userModel");
 const { createCompany, findCompany } = require("../models/companyModel");
 const {
@@ -28,6 +39,7 @@ const {
   handlePublicSignup,
 } = require("./helpers/users/login.helper");
 const { getCompanyUsersQuery } = require("./queries/userQueries");
+const { extractDeviceInfo } = require("../utils/deviceDetection");
 
 exports.signup = async (req, res, next) => {
   try {
@@ -82,15 +94,41 @@ exports.signup = async (req, res, next) => {
     // Create invite slots
     await createInviteSlots(company._id, createManyInviteSlots);
 
-    // Update user with company and refresh token
-    const refreshToken = generateToken(user);
-    user = await updateUser(
-      { _id: user._id },
-      { companyId: company._id, refreshToken }
-    );
+    // Update user with company
+    user = await updateUser({ _id: user._id }, { companyId: company._id });
+
+    // Fetch clean user object without password for response
+    const cleanUser = await findUser({ _id: user._id });
+
+    // Generate both tokens
+    const accessToken = generateToken(cleanUser);
+    const refreshToken = generateRefreshToken(cleanUser);
+
+    // Get device info
+    const deviceInfo = extractDeviceInfo(req);
+
+    // Calculate expiration date (30 days from now)
+    const expiresAt = calculateRefreshTokenExpiry();
+
+    // Create refresh token data
+    const refreshTokenData = {
+      token: refreshToken,
+      deviceInfo,
+      expiresAt,
+    };
+
+    // Add refresh token to user's array
+    await addRefreshToken(user._id, refreshTokenData);
+
+    // Set refresh token as httpOnly cookie
+    setRefreshTokenCookie(res, refreshToken);
 
     return generateResponse(
-      { user, company },
+      {
+        user: cleanUser,
+        company,
+        accessToken,
+      },
       "Admin and company created successfully",
       res,
       STATUS_CODES.CREATED
@@ -137,6 +175,7 @@ exports.login = async (req, res, next) => {
         password,
         company,
         inviteSlot,
+        req,
         res,
         next
       );
@@ -183,6 +222,7 @@ exports.login = async (req, res, next) => {
         email,
         password,
         company,
+        req,
         res,
         next
       );
@@ -198,14 +238,21 @@ exports.login = async (req, res, next) => {
     if (existingUser) {
       const domain = email.split("@")[1];
       const company = await findCompany({ domain });
-      return handleRegularLogin(existingUser, password, company, res, next);
+      return handleRegularLogin(
+        existingUser,
+        password,
+        company,
+        req,
+        res,
+        next
+      );
     }
 
     // Handle domain-based signup
     const domain = email.split("@")[1];
     const company = await findCompany({ domain });
     if (company) {
-      return handleDomainSignup(name, email, password, company, res, next);
+      return handleDomainSignup(name, email, password, company, req, res, next);
     }
 
     // No matching company domain

@@ -1,0 +1,26 @@
+# Environment Variables for Authentication System
+
+# Existing JWT configuration
+JWT_SECRET=your_long_random_secret_here_32_chars_minimum
+JWT_EXPIRATION=15m
+
+# New Refresh Token configuration  
+REFRESH_JWT_SECRET=different_long_random_secret_here_32_chars_minimum
+REFRESH_JWT_EXPIRATION=30d
+
+# Database
+MONGO_URI=mongodb://localhost:27017/boardd
+
+# Server
+PORT=8000
+NODE_ENV=development
+
+# Frontend
+FRONTEND_URL=http://localhost:3000
+
+# Email (if using)
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+
+# Backend URL
+BACKEND_URL=http://localhost:8000 

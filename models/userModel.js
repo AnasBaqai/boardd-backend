@@ -2,10 +2,49 @@
 
 const { Schema, model, Types } = require("mongoose");
 const { sign } = require("jsonwebtoken");
+const { v4: uuidv4 } = require("uuid");
 const { ROLES } = require("../utils/constants");
+const { createDeviceFingerprint } = require("../utils/deviceDetection");
 const mongoosePaginate = require("mongoose-paginate-v2");
 const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
 const { getMongooseAggregatePaginatedData } = require("../utils");
+
+// Token Subschema for refresh tokens
+const refreshTokenSchema = new Schema(
+  {
+    token: {
+      type: String,
+      required: true,
+    },
+    deviceInfo: {
+      userAgent: { type: String },
+      ipAddress: { type: String },
+      browser: { type: String },
+      os: { type: String },
+      deviceType: { type: String }, // mobile, desktop, tablet
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastUsedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    revokedAt: {
+      type: Date,
+    },
+  },
+  { _id: true } // Allow MongoDB to generate _id for each token
+);
 
 const userSchema = new Schema(
   {
@@ -27,16 +66,32 @@ const userSchema = new Schema(
       type: { type: String, enum: ["Point"], default: "Point" },
       coordinates: { type: [Number, Number] },
     },
-
     image: { type: String },
     role: { type: String, default: "employee", enum: Object.values(ROLES) },
     isActive: { type: Boolean, default: true },
     isDemo: { type: Boolean, default: false },
     fcmToken: { type: String },
-    refreshToken: { type: String },
+
+    // New refresh token system
+    refreshTokens: { type: [refreshTokenSchema], select: false },
+
+    // Last login tracking
+    lastLoginAt: {
+      type: Date,
+    },
+
+    // Security settings
+    maxActiveDevices: {
+      type: Number,
+      default: 5, // Maximum number of devices that can be logged in simultaneously
+    },
   },
   { timestamps: true }
 );
+
+// Index for efficient token lookups
+userSchema.index({ "refreshTokens.token": 1 });
+userSchema.index({ "refreshTokens.expiresAt": 1 });
 
 // register pagination plugin to user model
 userSchema.plugin(mongoosePaginate);
@@ -78,7 +133,7 @@ exports.generateToken = (user) => {
       role: user.role,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "30d" }
+    { expiresIn: process.env.JWT_EXPIRATION }
   );
 
   return token;
@@ -86,12 +141,80 @@ exports.generateToken = (user) => {
 
 // generate refresh token
 exports.generateRefreshToken = (user) => {
-  // Generate a refresh token
-  const refreshToken = sign({ id: user._id }, process.env.REFRESH_JWT_SECRET, {
-    expiresIn: process.env.REFRESH_JWT_EXPIRATION, // Set the expiration time for the refresh token
+  // Generate a UUID refresh token (not JWT)
+  return uuidv4();
+};
+
+// New methods for refresh token management
+
+// Add refresh token to user (complex logic - can't use updateUser)
+exports.addRefreshToken = async (userId, tokenData) => {
+  const user = await UserModel.findById(userId).select("+refreshTokens");
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  // Create device fingerprint for comparison
+  const newDeviceFingerprint = createDeviceFingerprint(tokenData.deviceInfo);
+
+  // Check if this device already has a token
+  const existingTokenIndex = user.refreshTokens.findIndex((token) => {
+    const existingFingerprint = createDeviceFingerprint(token.deviceInfo);
+    return existingFingerprint === newDeviceFingerprint && token.isActive;
   });
 
-  return refreshToken;
+  if (existingTokenIndex !== -1) {
+    // Device already has a token - replace it
+    console.log("🔄 Same device detected, replacing existing token");
+    user.refreshTokens[existingTokenIndex] = tokenData;
+  } else {
+    // New device - check device limit
+    const activeTokens = user.refreshTokens.filter(
+      (token) => token.isActive && token.expiresAt > new Date()
+    );
+
+    if (activeTokens.length >= user.maxActiveDevices) {
+      // Remove the oldest token using correct syntax
+      const oldestToken = activeTokens.sort(
+        (a, b) => a.lastUsedAt - b.lastUsedAt
+      )[0];
+      console.log("🗑️ Device limit reached, removing oldest token");
+      user.refreshTokens.pull(oldestToken._id); // ✅ Correct syntax
+    }
+
+    // Add new refresh token for new device
+    console.log("📱 New device detected, adding new token");
+    user.refreshTokens.push(tokenData);
+  }
+
+  user.lastLoginAt = new Date();
+  return await user.save();
+};
+
+// Get active refresh tokens for user (filtering logic - can't use findUser)
+exports.getActiveRefreshTokens = async (userId) => {
+  const user = await UserModel.findById(userId).select("+refreshTokens");
+  if (!user) {
+    return [];
+  }
+
+  return user.refreshTokens.filter(
+    (token) => token.isActive && token.expiresAt > new Date()
+  );
+};
+
+// Clean up expired tokens (bulk operation - can't use updateUser on single user)
+exports.cleanupExpiredTokens = async () => {
+  return await UserModel.updateMany(
+    {},
+    {
+      $pull: {
+        refreshTokens: {
+          $or: [{ expiresAt: { $lt: new Date() } }, { isActive: false }],
+        },
+      },
+    }
+  );
 };
 
 // get FcmToken

@@ -1,12 +1,43 @@
-const { generateResponse } = require("../../../utils");
+const { generateResponse, setRefreshTokenCookie } = require("../../../utils");
 const { STATUS_CODES, ROLES } = require("../../../utils/constants");
+const {
+  REFRESH_TOKEN,
+  calculateRefreshTokenExpiry,
+} = require("../../../utils/tokenConstants");
 const {
   createUser,
   generateToken,
-  updateUser,
+  generateRefreshToken,
   findUser,
+  addRefreshToken,
 } = require("../../../models/userModel");
 const { hashPassword, comparePassword } = require("./signup.helper");
+const { extractDeviceInfo } = require("../../../utils/deviceDetection");
+
+// Helper function to create and store refresh token
+const createAndStoreRefreshToken = async (user, req) => {
+  // Generate both tokens
+  const accessToken = generateToken(user);
+  const refreshToken = generateRefreshToken(user);
+
+  // Get device info
+  const deviceInfo = extractDeviceInfo(req);
+
+  // Calculate expiration date (30 days from now)
+  const expiresAt = calculateRefreshTokenExpiry();
+
+  // Create refresh token data
+  const refreshTokenData = {
+    token: refreshToken,
+    deviceInfo,
+    expiresAt,
+  };
+
+  // Add refresh token to user's array
+  await addRefreshToken(user._id, refreshTokenData);
+
+  return { accessToken, refreshToken };
+};
 
 exports.handleInviteSignup = async (
   name,
@@ -14,6 +45,7 @@ exports.handleInviteSignup = async (
   password,
   company,
   inviteSlot,
+  req,
   res,
   next
 ) => {
@@ -60,12 +92,23 @@ exports.handleInviteSignup = async (
     role: role,
   });
 
-  // Generate and update refresh token
-  const refreshToken = generateToken(user);
-  user = await updateUser({ _id: user._id }, { refreshToken });
+  // Fetch clean user object without password for response
+  const cleanUser = await findUser({ _id: user._id });
+
+  // Generate both tokens and store refresh token
+  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+    cleanUser,
+    req
+  );
+
+  // Set refresh token as httpOnly cookie
+  setRefreshTokenCookie(res, refreshToken);
 
   return generateResponse(
-    { user },
+    {
+      user: cleanUser,
+      accessToken,
+    },
     "User signed up successfully",
     res,
     STATUS_CODES.SUCCESS
@@ -77,6 +120,7 @@ exports.handlePublicSignup = async (
   email,
   password,
   company,
+  req,
   res,
   next
 ) => {
@@ -91,12 +135,23 @@ exports.handlePublicSignup = async (
     role: ROLES.EMPLOYEE, // Default role for public signups
   });
 
-  // Generate and update refresh token
-  const refreshToken = generateToken(user);
-  user = await updateUser({ _id: user._id }, { refreshToken });
+  // Fetch clean user object without password for response
+  const cleanUser = await findUser({ _id: user._id });
+
+  // Generate both tokens and store refresh token
+  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+    cleanUser,
+    req
+  );
+
+  // Set refresh token as httpOnly cookie
+  setRefreshTokenCookie(res, refreshToken);
 
   return generateResponse(
-    { user },
+    {
+      user: cleanUser,
+      accessToken,
+    },
     "User signed up successfully via public link",
     res,
     STATUS_CODES.SUCCESS
@@ -108,6 +163,7 @@ exports.handleDomainSignup = async (
   email,
   password,
   company,
+  req,
   res,
   next
 ) => {
@@ -128,19 +184,37 @@ exports.handleDomainSignup = async (
     role: ROLES.EMPLOYEE, // Default role for domain signups
   });
 
-  // Generate and update refresh token
-  const refreshToken = generateToken(user);
-  user = await updateUser({ _id: user._id }, { refreshToken });
+  // Fetch clean user object without password for response
+  const cleanUser = await findUser({ _id: user._id });
+
+  // Generate both tokens and store refresh token
+  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+    cleanUser,
+    req
+  );
+
+  // Set refresh token as httpOnly cookie
+  setRefreshTokenCookie(res, refreshToken);
 
   return generateResponse(
-    { user },
+    {
+      user: cleanUser,
+      accessToken,
+    },
     "User account created successfully. Waiting for admin approval.",
     res,
     STATUS_CODES.SUCCESS
   );
 };
 
-exports.handleRegularLogin = async (user, password, company, res, next) => {
+exports.handleRegularLogin = async (
+  user,
+  password,
+  company,
+  req,
+  res,
+  next
+) => {
   if (!user.isActive) {
     return next({
       statusCode: STATUS_CODES.UNAUTHORIZED,
@@ -155,12 +229,23 @@ exports.handleRegularLogin = async (user, password, company, res, next) => {
     });
   }
 
-  // Generate and update refresh token
-  const refreshToken = generateToken(user);
-  const updatedUser = await updateUser({ _id: user._id }, { refreshToken });
+  // Fetch clean user object without password for response
+  const cleanUser = await findUser({ _id: user._id });
+
+  // Generate both tokens and store refresh token
+  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+    cleanUser,
+    req
+  );
+
+  // Set refresh token as httpOnly cookie
+  setRefreshTokenCookie(res, refreshToken);
 
   return generateResponse(
-    { user: updatedUser },
+    {
+      user: cleanUser,
+      accessToken,
+    },
     "User logged in successfully",
     res,
     STATUS_CODES.SUCCESS
