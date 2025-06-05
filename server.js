@@ -50,7 +50,32 @@ app.use(
   })
 );
 
-app.use(cors({ origin: "*", credentials: true }));
+// CORS configuration - cannot use wildcard "*" when credentials: true
+const allowedOrigins = [
+  "http://localhost:3000", // Local development
+  "http://localhost:3001", // Alternative local port
+  "https://boarddd.ddns.net", // Production domain
+  "https://www.boarddd.ddns.net", // Production with www
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "accessToken"],
+  })
+);
+
 app.get("/", (req, res) => res.json({ message: "Welcome to the Boarddd" }));
 
 app.use(log);
