@@ -12,6 +12,7 @@ const { STATUS_CODES } = require("../utils/constants");
 const { createChannelTab } = require("../models/channelTabsModel");
 const {
   createDefaultTabs,
+  getAdminsAndMergeMembers,
 } = require("./helpers/channelTabs/channelTabs.helper");
 const {
   getAllMembersInChannelQuery,
@@ -25,6 +26,10 @@ exports.createChannel = async (req, res, next) => {
 
     const userId = req.user.id;
     const user = await findUser({ _id: userId });
+
+    // Get all company admins and merge with creator (avoiding duplicates)
+    const allMembers = await getAdminsAndMergeMembers(user.companyId, [userId]);
+
     const channel = await createChannel({
       channelName,
       channelDescription,
@@ -32,12 +37,18 @@ exports.createChannel = async (req, res, next) => {
       isPrivate,
       createdBy: userId,
       channelToken: generateJoinToken(),
-      members: [userId],
+      members: allMembers,
     });
-    // create a default tab for the channel
-    const defaultTabs = createDefaultTabs(channel._id, userId, user.companyId);
+
+    // create default tabs with admins included
+    const defaultTabs = await createDefaultTabs(
+      channel._id,
+      userId,
+      user.companyId
+    );
     // create default tabs with promise.all
     await Promise.all(defaultTabs.map((tab) => createChannelTab(tab)));
+
     return generateResponse(
       channel,
       "Channel created successfully",

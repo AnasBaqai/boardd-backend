@@ -14,6 +14,9 @@ const {
 } = require("./queries/channelTabsQuery");
 const { findCompany } = require("../models/companyModel");
 const { findUser } = require("../models/userModel");
+const {
+  getAdminsAndMergeMembers,
+} = require("./helpers/channelTabs/channelTabs.helper");
 
 exports.addMembersToChannelTab = async (req, res, next) => {
   try {
@@ -297,11 +300,16 @@ exports.createNewChannelTab = async (req, res, next) => {
       });
     }
 
+    // Get all company admins and merge with creator (avoiding duplicates)
+    const allMembers = await getAdminsAndMergeMembers(channel.companyId, [
+      userId,
+    ]);
+
     // create channel tab
     const channelTabBody = {
       channelId,
       tabName,
-      members: [userId],
+      members: allMembers,
       createdBy: userId,
       companyId: channel.companyId,
       isPrivate,
