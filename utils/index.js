@@ -222,22 +222,44 @@ exports.formatDateTime = (date) => moment(date).format("DD-MM-YYYY HH:mm:ss");
 
 // Helper function to generate activity messages
 exports.generateActivityMessage = (field, userName, data) => {
-  const { previousValue, newValue, taskTitle } = data;
+  const { previousValue, newValue, taskTitle, isCreation = false } = data;
 
   switch (field) {
     case "status":
+      if (isCreation || previousValue === null || previousValue === undefined) {
+        return {
+          forCreator: `You changed the status to ${newValue}`,
+          forOthers: `${userName} changed the status to ${newValue}`,
+        };
+      }
       return {
         forCreator: `You changed the status of "${taskTitle}" from ${previousValue} to ${newValue}`,
         forOthers: `${userName} changed the status of "${taskTitle}" from ${previousValue} to ${newValue}`,
       };
 
     case "priority":
+      if (isCreation || previousValue === null || previousValue === undefined) {
+        return {
+          forCreator: `You changed the priority of "${taskTitle}" to ${newValue}`,
+          forOthers: `${userName} changed the priority of "${taskTitle}" to ${newValue}`,
+        };
+      }
       return {
         forCreator: `You changed the priority of "${taskTitle}" from ${previousValue} to ${newValue}`,
         forOthers: `${userName} changed the priority of "${taskTitle}" from ${previousValue} to ${newValue}`,
       };
 
     case "dueDate":
+      if (isCreation || previousValue === null || previousValue === undefined) {
+        return {
+          forCreator: `You set the due date of "${taskTitle}" to ${new Date(
+            newValue
+          ).toLocaleDateString()}`,
+          forOthers: `${userName} set the due date of "${taskTitle}" to ${new Date(
+            newValue
+          ).toLocaleDateString()}`,
+        };
+      }
       return {
         forCreator: `You changed the due date of "${taskTitle}" to ${new Date(
           newValue
@@ -258,6 +280,12 @@ exports.generateActivityMessage = (field, userName, data) => {
       };
 
     case "description":
+      if (isCreation || previousValue === null || previousValue === undefined) {
+        return {
+          forCreator: `You added description to "${taskTitle}"`,
+          forOthers: `${userName} added description to "${taskTitle}"`,
+        };
+      }
       return {
         forCreator: `You updated the description of "${taskTitle}"`,
         forOthers: `${userName} updated the description of "${taskTitle}"`,
@@ -295,6 +323,12 @@ exports.generateActivityMessage = (field, userName, data) => {
       }
 
     default:
+      if (isCreation || previousValue === null || previousValue === undefined) {
+        return {
+          forCreator: `You set ${field} of "${taskTitle}" to ${newValue}`,
+          forOthers: `${userName} set ${field} of "${taskTitle}" to ${newValue}`,
+        };
+      }
       return {
         forCreator: `You updated ${field} of "${taskTitle}"`,
         forOthers: `${userName} updated ${field} of "${taskTitle}"`,

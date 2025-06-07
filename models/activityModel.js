@@ -4,6 +4,7 @@ const { Schema, model, Types } = require("mongoose");
 const mongoosePaginate = require("mongoose-paginate-v2");
 const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
 const { getMongooseAggregatePaginatedData } = require("../utils");
+const { ACTION_TYPE } = require("../utils/constants");
 
 const activitySchema = new Schema({
   // Context references
@@ -15,27 +16,7 @@ const activitySchema = new Schema({
   userId: { type: Types.ObjectId, ref: "User", required: true },
   actionType: {
     type: String,
-    enum: [
-      "CREATE_TASK",
-      "UPDATE_TASK",
-      "DELETE_TASK",
-      "CREATE_SUBTASK",
-      "UPDATE_SUBTASK",
-      "DELETE_SUBTASK",
-      "ASSIGN_USER",
-      "CHANGE_STATUS",
-      "CHANGE_PRIORITY",
-      "CHANGE_DUE_DATE",
-      "ADD_TAG",
-      "REMOVE_TAG",
-      "ADD_DESCRIPTION",
-      "UPDATE_DESCRIPTION",
-      "ADD_STROKE_COLOR",
-      "UPDATE_STROKE_COLOR",
-      "ADD_CUSTOM_FIELD",
-      "UPDATE_CUSTOM_FIELD",
-      "DELETE_CUSTOM_FIELD",
-    ],
+    enum: Object.values(ACTION_TYPE),
     required: true,
   },
 

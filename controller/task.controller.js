@@ -70,7 +70,7 @@ exports.createTask = async (req, res, next) => {
       title,
       projectId,
       assignedTo: assignedTo || [],
-      priority: priority || "medium",
+      priority: priority,
       dueDate: dueDate || null,
       createdBy: userId,
     });
@@ -106,6 +106,7 @@ exports.createTask = async (req, res, next) => {
 
     // 2. Handle priority setting activity
     if (priority) {
+      console.log("priority", priority);
       const priorityActivity = await handlePriorityActivity({
         priority,
         userName,
@@ -312,10 +313,18 @@ exports.batchUpdateTask = async (req, res, next) => {
     const notifications = [];
 
     for (const [field, value] of Object.entries(updates)) {
+      // Determine if this is a creation-like scenario (setting a field for the first time)
+      const isFieldCreation =
+        previousValues[field] === null ||
+        previousValues[field] === undefined ||
+        (Array.isArray(previousValues[field]) &&
+          previousValues[field].length === 0);
+
       const message = generateActivityMessage(field, userName, {
         previousValue: previousValues[field],
         newValue: value,
         taskTitle: task.title,
+        isCreation: isFieldCreation,
       });
 
       // Create activity

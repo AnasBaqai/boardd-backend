@@ -2,6 +2,7 @@ const { createActivity } = require("../../../models/activityModel");
 const { createNotification } = require("../../../models/notificationModel");
 const { findManyUsers } = require("../../../models/userModel");
 const { generateActivityMessage } = require("../../../utils");
+const { ACTION_TYPE } = require("../../../utils/constants");
 /**
  * Create task creation activity and notifications
  */
@@ -28,7 +29,7 @@ exports.createTaskActivitiesAndNotifications = async ({
       projectId,
       taskId: task._id,
       userId,
-      actionType: "CREATE_TASK",
+      actionType: ACTION_TYPE.CREATE_TASK,
       timestamp: new Date(),
       message: createTaskMessage,
     })
@@ -69,16 +70,17 @@ exports.handlePriorityActivity = async ({
   userId,
 }) => {
   const priorityMessage = generateActivityMessage("priority", userName, {
-    previousValue: "medium", // default value
+    previousValue: null,
     newValue: priority,
     taskTitle: task.title,
+    isCreation: true,
   });
 
   return createActivity({
     projectId,
     taskId: task._id,
     userId,
-    actionType: "CHANGE_PRIORITY",
+    actionType: ACTION_TYPE.CHANGE_PRIORITY,
     field: "priority",
     newValue: priority,
     timestamp: new Date(),
@@ -100,13 +102,14 @@ exports.handleDueDateActivity = async ({
     previousValue: null,
     newValue: dueDate,
     taskTitle: task.title,
+    isCreation: true,
   });
 
   return createActivity({
     projectId,
     taskId: task._id,
     userId,
-    actionType: "CHANGE_DUE_DATE",
+    actionType: ACTION_TYPE.CHANGE_DUE_DATE,
     field: "dueDate",
     newValue: dueDate,
     timestamp: new Date(),
@@ -147,7 +150,7 @@ exports.handleAssignmentActivitiesAndNotifications = async ({
       projectId,
       taskId: task._id,
       userId,
-      actionType: "ASSIGN_USER",
+      actionType: ACTION_TYPE.ASSIGN_USER,
       field: "assignedTo",
       newValue: assignedTo,
       timestamp: new Date(),

@@ -85,6 +85,7 @@ exports.getTaskByIdQuery = (taskId) => {
               _id: 1,
               message: 1,
               timestamp: 1,
+              actionType: 1,
             },
           },
           { $sort: { timestamp: -1 } },
