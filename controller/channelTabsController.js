@@ -328,3 +328,197 @@ exports.createNewChannelTab = async (req, res, next) => {
     });
   }
 };
+
+// Create multiple selected tabs for a channel
+exports.createSelectedChannelTabs = async (req, res, next) => {
+  try {
+    const { channelId, tabs } = parseBody(req.body);
+    const userId = req.user.id;
+
+    // Get current user to check their company
+    const currentUser = await findUser({ _id: userId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
+    // Find and validate channel
+    const channel = await findChannel({ _id: channelId });
+    if (!channel) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
+    }
+
+    // Security Check: Verify the channel belongs to the user's company
+    if (channel.companyId.toString() !== currentUser.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You can only create tabs in channels from your own company",
+      });
+    }
+
+    // Validate tabs array
+    if (!tabs || !Array.isArray(tabs) || tabs.length === 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Tabs array is required and must not be empty",
+      });
+    }
+
+    // Get valid tab names from constants
+    const validTabNames = Object.values(
+      require("../utils/constants").DEFAULT_TABS
+    );
+
+    // Validate all tab names first
+    const invalidTabNames = tabs
+      .map((tab) => tab.tabName)
+      .filter((name) => !validTabNames.includes(name));
+
+    if (invalidTabNames.length > 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: `Invalid tab names: ${invalidTabNames.join(
+          ", "
+        )}. Must be one of: ${validTabNames.join(", ")}`,
+      });
+    }
+
+    // Check for existing default tabs with the same names in this channel
+    const requestedTabNames = tabs.map((tab) => tab.tabName);
+    const existingTabs = await getAllTabs({
+      query: [
+        {
+          $match: {
+            channelId: {
+              $eq: require("mongoose").Types.ObjectId.createFromHexString(
+                channelId
+              ),
+            },
+            tabName: { $in: requestedTabNames },
+            isDefault: true,
+          },
+        },
+      ],
+      page: 1,
+      limit: 100,
+      responseKey: "tabs",
+    });
+
+    const existingTabNames = existingTabs.tabs.map((tab) => tab.tabName);
+
+    // Filter out tabs that already exist
+    const tabsToCreate = tabs.filter(
+      (tab) => !existingTabNames.includes(tab.tabName)
+    );
+    const duplicateTabs = tabs.filter((tab) =>
+      existingTabNames.includes(tab.tabName)
+    );
+
+    const createdTabs = [];
+    const errors = [];
+
+    // Add errors for duplicate tabs
+    duplicateTabs.forEach((tab) => {
+      errors.push(`Tab "${tab.tabName}" already exists in this channel`);
+    });
+
+    // Process only new tabs
+    for (const tabData of tabsToCreate) {
+      try {
+        const { tabName, isPrivate, members: privateMembers = [] } = tabData;
+
+        let tabMembers = [];
+
+        if (isPrivate) {
+          // For private tabs: Add admins + specific users from request
+          tabMembers = await getAdminsAndMergeMembers(
+            channel.companyId,
+            privateMembers
+          );
+        } else {
+          // For public tabs: Add all channel members
+          tabMembers = channel.members || [];
+        }
+
+        // Create tab body
+        const channelTabBody = {
+          channelId,
+          tabName,
+          members: tabMembers,
+          createdBy: userId,
+          companyId: channel.companyId,
+          isPrivate: isPrivate ?? false,
+          isDefault: true, // These are considered default tabs
+        };
+
+        // Create the tab
+        const newTab = await createChannelTab(channelTabBody);
+        createdTabs.push(newTab);
+      } catch (tabError) {
+        console.error(`Error creating tab ${tabData?.tabName}:`, tabError);
+        errors.push(
+          `Failed to create tab ${tabData?.tabName}: ${tabError.message}`
+        );
+      }
+    }
+
+    // Prepare response
+    const response = {
+      createdTabs,
+      totalCreated: createdTabs.length,
+      totalRequested: tabs.length,
+      alreadyExisted: duplicateTabs.length,
+      existingTabNames: existingTabNames,
+    };
+
+    if (errors.length > 0) {
+      response.errors = errors;
+    }
+
+    // Determine response status and message
+    if (createdTabs.length === 0 && duplicateTabs.length > 0) {
+      // All tabs already exist
+      return generateResponse(
+        response,
+        `All requested tabs already exist in this channel`,
+        res,
+        STATUS_CODES.CONFLICT
+      );
+    } else if (createdTabs.length === 0) {
+      // No tabs created due to errors
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Failed to create any tabs",
+        errors,
+      });
+    } else if (duplicateTabs.length > 0) {
+      // Partial success - some created, some already existed
+      const message = `${createdTabs.length} new tabs created successfully. ${duplicateTabs.length} tabs already existed.`;
+      return generateResponse(
+        response,
+        message,
+        res,
+        STATUS_CODES.PARTIAL_CONTENT
+      );
+    } else {
+      // All tabs created successfully
+      return generateResponse(
+        response,
+        "All tabs created successfully",
+        res,
+        STATUS_CODES.CREATED
+      );
+    }
+  } catch (error) {
+    console.error("Error in createSelectedChannelTabs:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to create channel tabs",
+    });
+  }
+};

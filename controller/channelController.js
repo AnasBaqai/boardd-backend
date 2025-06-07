@@ -41,13 +41,13 @@ exports.createChannel = async (req, res, next) => {
     });
 
     // create default tabs with admins included
-    const defaultTabs = await createDefaultTabs(
-      channel._id,
-      userId,
-      user.companyId
-    );
-    // create default tabs with promise.all
-    await Promise.all(defaultTabs.map((tab) => createChannelTab(tab)));
+    // const defaultTabs = await createDefaultTabs(
+    //   channel._id,
+    //   userId,
+    //   user.companyId
+    // );
+    // // create default tabs with promise.all
+    // await Promise.all(defaultTabs.map((tab) => createChannelTab(tab)));
 
     return generateResponse(
       channel,

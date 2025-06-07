@@ -1,5 +1,6 @@
 const Joi = require("joi");
 const { helpers } = require("./authValidation");
+const { DEFAULT_TABS } = require("../utils/constants");
 
 // Create channel tab validation schema
 const createChannelTabValidation = Joi.object({
@@ -31,6 +32,53 @@ const createChannelTabValidation = Joi.object({
     .default([])
     .messages({
       "array.base": "Members must be an array of valid user IDs",
+    }),
+});
+
+// Create selected channel tabs validation schema
+const createSelectedChannelTabsValidation = Joi.object({
+  channelId: helpers.objectIdValidation.required().messages({
+    "any.required": "Channel ID is required",
+  }),
+
+  tabs: Joi.array()
+    .items(
+      Joi.object({
+        tabName: Joi.string()
+          .valid(...Object.values(DEFAULT_TABS))
+          .required()
+          .messages({
+            "any.only": `Tab name must be one of: ${Object.values(
+              DEFAULT_TABS
+            ).join(", ")}`,
+            "any.required": "Tab name is required",
+          }),
+
+        isPrivate: Joi.boolean().optional().default(false).messages({
+          "boolean.base": "isPrivate must be a boolean value",
+        }),
+
+        members: Joi.array()
+          .items(helpers.objectIdValidation)
+          .optional()
+          .default([])
+          .when("isPrivate", {
+            is: true,
+            then: Joi.optional(),
+            otherwise: Joi.forbidden().messages({
+              "any.unknown": "Members can only be specified for private tabs",
+            }),
+          })
+          .messages({
+            "array.base": "Members must be an array of valid user IDs",
+          }),
+      })
+    )
+    .min(1)
+    .required()
+    .messages({
+      "array.min": "At least one tab must be specified",
+      "any.required": "Tabs array is required",
     }),
 });
 
@@ -301,6 +349,9 @@ const validateRequest = (schema, source = "body") => {
 
 module.exports = {
   validateCreateChannelTab: validateRequest(createChannelTabValidation),
+  validateCreateSelectedChannelTabs: validateRequest(
+    createSelectedChannelTabsValidation
+  ),
   validateUpdateChannelTab: validateRequest(updateChannelTabValidation),
   validateAddMembersToChannelTab: validateRequest(
     addMembersToChannelTabValidation
@@ -326,6 +377,7 @@ module.exports = {
   // Export schemas for testing or custom usage
   schemas: {
     createChannelTabValidation,
+    createSelectedChannelTabsValidation,
     updateChannelTabValidation,
     addMembersToChannelTabValidation,
     removeMembersFromChannelTabValidation,

@@ -6,11 +6,13 @@ const {
   getAllTabsOfChannel,
   getAllTabMembers,
   createNewChannelTab,
+  createSelectedChannelTabs,
 } = require("../controller/channelTabsController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
 const {
   validateCreateChannelTab,
+  validateCreateSelectedChannelTabs,
   validateAddMembersToChannelTab,
   validateTabIdParam,
   validateGetAllTabsOfChannelQuery,
@@ -32,6 +34,14 @@ class ChannelTabsApi {
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       validateCreateChannelTab,
       createNewChannelTab
+    );
+
+    // Create multiple selected channel tabs with validation
+    router.post(
+      "/create-selected",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateCreateSelectedChannelTabs,
+      createSelectedChannelTabs
     );
 
     // Add members to channel tab with validation
