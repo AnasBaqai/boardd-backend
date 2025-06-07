@@ -1,7 +1,6 @@
 const { generateResponse, setRefreshTokenCookie } = require("../../../utils");
 const { STATUS_CODES, ROLES } = require("../../../utils/constants");
 const {
-  REFRESH_TOKEN,
   calculateRefreshTokenExpiry,
 } = require("../../../utils/tokenConstants");
 const {
@@ -16,27 +15,75 @@ const { extractDeviceInfo } = require("../../../utils/deviceDetection");
 
 // Helper function to create and store refresh token
 const createAndStoreRefreshToken = async (user, req) => {
-  // Generate both tokens
-  const accessToken = generateToken(user);
-  const refreshToken = generateRefreshToken(user);
+  try {
+    // Generate both tokens
+    const accessToken = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
 
-  // Get device info
-  const deviceInfo = extractDeviceInfo(req);
+    // Get device info
+    const deviceInfo = extractDeviceInfo(req);
 
-  // Calculate expiration date (30 days from now)
-  const expiresAt = calculateRefreshTokenExpiry();
+    // Calculate expiration date (30 days from now)
+    const expiresAt = calculateRefreshTokenExpiry();
 
-  // Create refresh token data
-  const refreshTokenData = {
-    token: refreshToken,
-    deviceInfo,
-    expiresAt,
-  };
+    // Create refresh token data
+    const refreshTokenData = {
+      token: refreshToken,
+      deviceInfo,
+      expiresAt,
+    };
 
-  // Add refresh token to user's array
-  await addRefreshToken(user._id, refreshTokenData);
+    // Add refresh token to user's array
+    await addRefreshToken(user._id, refreshTokenData);
 
-  return { accessToken, refreshToken };
+    return { accessToken, refreshToken };
+  } catch (error) {
+    console.error("Error creating refresh token:", error);
+    throw new Error("Failed to generate authentication tokens");
+  }
+};
+
+// Helper function to validate domain match
+const validateDomainMatch = (email, companyDomain) => {
+  const userDomain = email?.split("@")?.[1];
+  return userDomain === companyDomain;
+};
+
+// Helper function to create user and generate response
+const createUserAndResponse = async (userData, req, res, successMessage) => {
+  try {
+    // Create new user
+    const hashedPassword = await hashPassword(userData.password);
+    const user = await createUser({
+      ...userData,
+      password: hashedPassword,
+    });
+
+    // Fetch clean user object without password for response
+    const cleanUser = await findUser({ _id: user._id });
+
+    // Generate both tokens and store refresh token
+    const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+      cleanUser,
+      req
+    );
+
+    // Set refresh token as httpOnly cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    return generateResponse(
+      {
+        user: cleanUser,
+        accessToken,
+      },
+      successMessage,
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error creating user:", error);
+    throw new Error("Failed to create user account");
+  }
 };
 
 exports.handleInviteSignup = async (
@@ -49,70 +96,62 @@ exports.handleInviteSignup = async (
   res,
   next
 ) => {
-  // Check if user with this email already exists
-  const existingUser = await findUser({ email });
-  if (existingUser) {
+  try {
+    // Check if user with this email already exists
+    const existingUser = await findUser({ email });
+    if (existingUser) {
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "User already exists",
+      });
+    }
+
+    // Validate company domain
+    if (!validateDomainMatch(email, company?.domain)) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Invalid company domain",
+      });
+    }
+
+    // Check if the slot is reserved for a specific email
+    if (
+      inviteSlot?.reserved &&
+      inviteSlot?.reservedFor &&
+      inviteSlot.reservedFor !== email
+    ) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "This invite link is reserved for a different email address",
+      });
+    }
+
+    // Determine role based on reservation or default to EMPLOYEE
+    const role = inviteSlot?.reservedRole ?? ROLES.EMPLOYEE;
+
+    // Create user data
+    const userData = {
+      name,
+      email,
+      password,
+      companyId: company._id,
+      isActive: true, // Users from invite are active by default
+      role,
+    };
+
+    return await createUserAndResponse(
+      userData,
+      req,
+      res,
+      "User signed up successfully"
+    );
+  } catch (error) {
+    console.error("Error in handleInviteSignup:", error);
     return next({
-      statusCode: STATUS_CODES.BAD_REQUEST,
-      message: "User already exists",
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to process invite signup",
     });
   }
-
-  // Validate company domain
-  if (company.domain !== email.split("@")[1]) {
-    return next({
-      statusCode: STATUS_CODES.BAD_REQUEST,
-      message: "Invalid company domain",
-    });
-  }
-
-  // Check if the slot is reserved for a specific email
-  if (
-    inviteSlot.reserved &&
-    inviteSlot.reservedFor &&
-    inviteSlot.reservedFor !== email
-  ) {
-    return next({
-      statusCode: STATUS_CODES.BAD_REQUEST,
-      message: "This invite link is reserved for a different email address",
-    });
-  }
-
-  // Determine role based on reservation or default to USER
-  const role = inviteSlot.reservedRole || ROLES.EMPLOYEE;
-
-  // Create new user with active status
-  const hashedPassword = await hashPassword(password);
-  let user = await createUser({
-    name,
-    email,
-    password: hashedPassword,
-    companyId: company._id,
-    isActive: true, // Users from invite are active by default
-    role: role,
-  });
-
-  // Fetch clean user object without password for response
-  const cleanUser = await findUser({ _id: user._id });
-
-  // Generate both tokens and store refresh token
-  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
-    cleanUser,
-    req
-  );
-
-  // Set refresh token as httpOnly cookie
-  setRefreshTokenCookie(res, refreshToken);
-
-  return generateResponse(
-    {
-      user: cleanUser,
-      accessToken,
-    },
-    "User signed up successfully",
-    res,
-    STATUS_CODES.SUCCESS
-  );
 };
 
 exports.handlePublicSignup = async (
@@ -124,38 +163,30 @@ exports.handlePublicSignup = async (
   res,
   next
 ) => {
-  // Create new user with active status (since it's a public link)
-  const hashedPassword = await hashPassword(password);
-  let user = await createUser({
-    name,
-    email,
-    password: hashedPassword,
-    companyId: company._id,
-    isActive: true, // Public link users are active by default
-    role: ROLES.EMPLOYEE, // Default role for public signups
-  });
+  try {
+    // Create user data
+    const userData = {
+      name,
+      email,
+      password,
+      companyId: company._id,
+      isActive: true, // Public link users are active by default
+      role: ROLES.EMPLOYEE, // Default role for public signups
+    };
 
-  // Fetch clean user object without password for response
-  const cleanUser = await findUser({ _id: user._id });
-
-  // Generate both tokens and store refresh token
-  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
-    cleanUser,
-    req
-  );
-
-  // Set refresh token as httpOnly cookie
-  setRefreshTokenCookie(res, refreshToken);
-
-  return generateResponse(
-    {
-      user: cleanUser,
-      accessToken,
-    },
-    "User signed up successfully via public link",
-    res,
-    STATUS_CODES.SUCCESS
-  );
+    return await createUserAndResponse(
+      userData,
+      req,
+      res,
+      "User signed up successfully via public link"
+    );
+  } catch (error) {
+    console.error("Error in handlePublicSignup:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to process public signup",
+    });
+  }
 };
 
 exports.handleDomainSignup = async (
@@ -167,44 +198,33 @@ exports.handleDomainSignup = async (
   res,
   next
 ) => {
-  if (!name) {
-    // assign name from email first part
-    name = email.split("@")[0];
+  try {
+    // Assign name from email first part if not provided
+    const userName = name || email?.split("@")?.[0] || "User";
+
+    // Create user data
+    const userData = {
+      name: userName,
+      email,
+      password,
+      companyId: company._id,
+      isActive: company.automaticSignup ? true : false, // Set user as inactive by default for domain signups
+      role: ROLES.EMPLOYEE, // Default role for domain signups
+    };
+
+    return await createUserAndResponse(
+      userData,
+      req,
+      res,
+      "User account created successfully. Waiting for admin approval."
+    );
+  } catch (error) {
+    console.error("Error in handleDomainSignup:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to process domain signup",
+    });
   }
-
-  const hashedPassword = await hashPassword(password);
-
-  // Create inactive user with company association
-  let user = await createUser({
-    name,
-    email,
-    password: hashedPassword,
-    companyId: company._id,
-    isActive: false, // Set user as inactive by default
-    role: ROLES.EMPLOYEE, // Default role for domain signups
-  });
-
-  // Fetch clean user object without password for response
-  const cleanUser = await findUser({ _id: user._id });
-
-  // Generate both tokens and store refresh token
-  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
-    cleanUser,
-    req
-  );
-
-  // Set refresh token as httpOnly cookie
-  setRefreshTokenCookie(res, refreshToken);
-
-  return generateResponse(
-    {
-      user: cleanUser,
-      accessToken,
-    },
-    "User account created successfully. Waiting for admin approval.",
-    res,
-    STATUS_CODES.SUCCESS
-  );
 };
 
 exports.handleRegularLogin = async (
@@ -215,39 +235,50 @@ exports.handleRegularLogin = async (
   res,
   next
 ) => {
-  if (!user.isActive) {
+  try {
+    // Check if user account is active
+    if (!user?.isActive) {
+      return next({
+        statusCode: STATUS_CODES.UNAUTHORIZED,
+        message: "Account is inactive. Please wait for admin approval.",
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await comparePassword(password, user?.password);
+    if (!isPasswordValid) {
+      return next({
+        statusCode: STATUS_CODES.UNAUTHORIZED,
+        message: "Invalid password",
+      });
+    }
+
+    // Fetch clean user object without password for response
+    const cleanUser = await findUser({ _id: user._id });
+
+    // Generate both tokens and store refresh token
+    const { accessToken, refreshToken } = await createAndStoreRefreshToken(
+      cleanUser,
+      req
+    );
+
+    // Set refresh token as httpOnly cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    return generateResponse(
+      {
+        user: cleanUser,
+        accessToken,
+      },
+      "User logged in successfully",
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error in handleRegularLogin:", error);
     return next({
-      statusCode: STATUS_CODES.UNAUTHORIZED,
-      message: "Account is inactive. Please wait for admin approval.",
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to process login",
     });
   }
-
-  if (!(await comparePassword(password, user.password))) {
-    return next({
-      statusCode: STATUS_CODES.UNAUTHORIZED,
-      message: "Invalid password",
-    });
-  }
-
-  // Fetch clean user object without password for response
-  const cleanUser = await findUser({ _id: user._id });
-
-  // Generate both tokens and store refresh token
-  const { accessToken, refreshToken } = await createAndStoreRefreshToken(
-    cleanUser,
-    req
-  );
-
-  // Set refresh token as httpOnly cookie
-  setRefreshTokenCookie(res, refreshToken);
-
-  return generateResponse(
-    {
-      user: cleanUser,
-      accessToken,
-    },
-    "User logged in successfully",
-    res,
-    STATUS_CODES.SUCCESS
-  );
 };

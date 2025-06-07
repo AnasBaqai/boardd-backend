@@ -5,12 +5,9 @@ const {
   generateResponse,
   parseBody,
   setRefreshTokenCookie,
+  extractDomainFromEmail,
 } = require("../utils");
-const {
-  REFRESH_TOKEN,
-  COOKIE_CONFIG,
-  calculateRefreshTokenExpiry,
-} = require("../utils/tokenConstants");
+const { calculateRefreshTokenExpiry } = require("../utils/tokenConstants");
 const {
   findUser,
   createUser,
@@ -21,25 +18,21 @@ const {
   addRefreshToken,
 } = require("../models/userModel");
 const { createCompany, findCompany } = require("../models/companyModel");
-const {
-  createManyInviteSlots,
-  findInviteSlot,
-  updateInviteSlot,
-  findAvailableInviteSlot,
-} = require("../models/inviteSlotModel");
+const { createManyInviteSlots } = require("../models/inviteSlotModel");
 const {
   hashPassword,
   generateJoinToken,
   createInviteSlots,
 } = require("./helpers/users/signup.helper");
-const {
-  handleInviteSignup,
-  handleDomainSignup,
-  handleRegularLogin,
-  handlePublicSignup,
-} = require("./helpers/users/login.helper");
 const { getCompanyUsersQuery } = require("./queries/userQueries");
 const { extractDeviceInfo } = require("../utils/deviceDetection");
+const {
+  determineLoginStrategy,
+  handleDomainFlow,
+  handleRegularFlow,
+  handlePublicFlow,
+  handleInviteFlow,
+} = require("./helpers/users/login.flow");
 
 exports.signup = async (req, res, next) => {
   try {
@@ -63,7 +56,7 @@ exports.signup = async (req, res, next) => {
     }
 
     // Check if company exists
-    const domain = email.split("@")[1];
+    const domain = extractDomainFromEmail(email);
     const existingCompany = await findCompany({ domain });
     if (existingCompany) {
       return next({
@@ -145,125 +138,61 @@ exports.signup = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { name, email, password } = parseBody(req.body);
-    const { token, joinToken } = req?.query;
+    const { token, joinToken } = req?.query ?? {};
 
-    // Handle invite-based signup (private invite)
-    if (token) {
-      // Validate invite token and get company
-      const inviteSlot = await findInviteSlot({ token });
-      if (!inviteSlot || inviteSlot?.used) {
+    // Strategy pattern for different login flows
+    const loginStrategy = await determineLoginStrategy(token, joinToken, email);
+
+    // Execute the appropriate strategy
+    switch (loginStrategy.type) {
+      case "INVITE_SIGNUP":
+        return await handleInviteFlow(
+          loginStrategy.data,
+          { name, email, password },
+          req,
+          res,
+          next
+        );
+
+      case "PUBLIC_SIGNUP":
+        return await handlePublicFlow(
+          loginStrategy.data,
+          { name, email, password },
+          req,
+          res,
+          next
+        );
+
+      case "REGULAR_LOGIN":
+        return await handleRegularFlow(
+          loginStrategy.data,
+          { email, password },
+          req,
+          res,
+          next
+        );
+
+      case "DOMAIN_SIGNUP":
+        return await handleDomainFlow(
+          loginStrategy.data,
+          { name, email, password },
+          req,
+          res,
+          next
+        );
+
+      default:
         return next({
-          statusCode: STATUS_CODES.NOT_FOUND,
-          message: inviteSlot?.used
-            ? "Invite slot already used"
-            : "Invite slot not found",
+          statusCode: STATUS_CODES.BAD_REQUEST,
+          message:
+            "Invalid login request. No matching authentication method found.",
         });
-      }
-
-      const company = await findCompany({ _id: inviteSlot?.companyId });
-      if (!company) {
-        return next({
-          statusCode: STATUS_CODES.NOT_FOUND,
-          message: "Company not found",
-        });
-      }
-
-      // Handle invite signup and mark slot as used
-      const result = await handleInviteSignup(
-        name,
-        email,
-        password,
-        company,
-        inviteSlot,
-        req,
-        res,
-        next
-      );
-      if (result.statusCode === STATUS_CODES.SUCCESS) {
-        await updateInviteSlot({ _id: inviteSlot._id }, { used: true });
-      }
-      return result;
     }
-
-    // Handle public link signup (joinToken)
-    if (joinToken) {
-      // Find company by joinToken
-      const company = await findCompany({ joinToken });
-      if (!company) {
-        return next({
-          statusCode: STATUS_CODES.NOT_FOUND,
-          message: "Company not found",
-        });
-      }
-
-      // Check if user with this email already exists
-      const existingUser = await findUser({ email });
-      if (existingUser) {
-        return next({
-          statusCode: STATUS_CODES.CONFLICT,
-          message: "User already exists",
-        });
-      }
-
-      // Find an available invite slot
-      const availableSlot = await findAvailableInviteSlot({
-        companyId: company._id,
-      });
-      if (!availableSlot) {
-        return next({
-          statusCode: STATUS_CODES.NOT_FOUND,
-          message: "No available invite slot found",
-        });
-      }
-
-      // Handle public signup and mark slot as used
-      const result = await handlePublicSignup(
-        name,
-        email,
-        password,
-        company,
-        req,
-        res,
-        next
-      );
-      if (result.statusCode === STATUS_CODES.SUCCESS) {
-        await updateInviteSlot({ _id: availableSlot._id }, { used: true });
-      }
-      return result;
-    }
-
-    // Regular login or domain signup flow
-    // Check if user exists
-    const existingUser = await findUser({ email }).select("+password");
-    if (existingUser) {
-      const domain = email.split("@")[1];
-      const company = await findCompany({ domain });
-      return handleRegularLogin(
-        existingUser,
-        password,
-        company,
-        req,
-        res,
-        next
-      );
-    }
-
-    // Handle domain-based signup
-    const domain = email.split("@")[1];
-    const company = await findCompany({ domain });
-    if (company) {
-      return handleDomainSignup(name, email, password, company, req, res, next);
-    }
-
-    // No matching company domain
-    return next({
-      statusCode: STATUS_CODES.NOT_FOUND,
-      message: "No matching company domain",
-    });
   } catch (error) {
+    console.error("Login error:", error);
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
-      message: error?.message,
+      message: error?.message ?? "An unexpected error occurred during login",
     });
   }
 };

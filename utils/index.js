@@ -352,3 +352,8 @@ exports.setRefreshTokenCookie = (res, refreshToken) => {
 
   res.cookie(COOKIE_CONFIG.REFRESH_TOKEN_NAME, refreshToken, cookieOptions);
 };
+
+// Helper function to extract domain from email
+exports.extractDomainFromEmail = (email) => {
+  return email.split("@")[1];
+};
