@@ -199,6 +199,47 @@ const batchUpdateTaskValidation = Joi.object({
     "object.min": "At least one field must be provided for update",
   });
 
+// Share task validation schema
+const shareTaskValidation = Joi.object({
+  emails: Joi.array()
+    .items(
+      Joi.string().email().messages({
+        "string.email": "Each email must be a valid email address",
+      })
+    )
+    .min(1)
+    .max(20)
+    .optional()
+    .messages({
+      "array.base": "Emails must be an array of email addresses",
+      "array.min": "At least one email is required when emails are provided",
+      "array.max": "Cannot share with more than 20 recipients at once",
+    }),
+
+  message: Joi.string().trim().max(500).optional().messages({
+    "string.max": "Custom message cannot exceed 500 characters",
+  }),
+
+  shareType: Joi.string()
+    .valid("email", "link", "both")
+    .optional()
+    .default("link")
+    .messages({
+      "any.only": "Share type must be one of: email, link, both",
+    }),
+}).custom((value, helpers) => {
+  // If shareType is 'email' or 'both', emails are required
+  if (
+    (value.shareType === "email" || value.shareType === "both") &&
+    !value.emails
+  ) {
+    return helpers.message(
+      "Emails are required when shareType is 'email' or 'both'"
+    );
+  }
+  return value;
+});
+
 // Task ID parameter validation
 const taskIdParamValidation = Joi.object({
   taskId: helpers.objectIdValidation.required().messages({
@@ -253,12 +294,14 @@ const validateRequest = (schema, source = "body") => {
 module.exports = {
   validateCreateTask: validateRequest(createTaskValidation),
   validateBatchUpdateTask: validateRequest(batchUpdateTaskValidation),
+  validateShareTask: validateRequest(shareTaskValidation),
   validateTaskIdParam: validateRequest(taskIdParamValidation, "params"),
 
   // Export schemas for testing or custom usage
   schemas: {
     createTaskValidation,
     batchUpdateTaskValidation,
+    shareTaskValidation,
     taskIdParamValidation,
     customFieldSchema,
   },

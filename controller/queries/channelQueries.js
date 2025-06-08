@@ -91,7 +91,7 @@ exports.getAllChannelsOfUserQuery = (userId) => {
   ];
 };
 
-// get all members in a channel
+// get all members in a channel with proper pagination
 exports.getAllMembersInChannelQuery = (channelId, currentUserId) => {
   return [
     {
@@ -138,72 +138,122 @@ exports.getAllMembersInChannelQuery = (channelId, currentUserId) => {
               isDemo: 1,
             },
           },
+          {
+            $sort: {
+              isDemo: 1, // Demo users last
+              name: 1, // Then by name
+            },
+          },
         ],
         as: "memberDetails",
       },
     },
     {
-      // Unwind the memberDetails array
-      $unwind: {
-        path: "$memberDetails",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      // Project only the required fields
+      // Project channel info and add total count before pagination
       $project: {
         _id: 1,
         channelName: 1,
         channelDescription: 1,
         isPrivate: 1,
-        member: {
-          _id: "$memberDetails._id",
-          name: "$memberDetails.name",
-          email: "$memberDetails.email",
-          role: "$memberDetails.role",
-          isActive: "$memberDetails.isActive",
-          isDemo: "$memberDetails.isDemo",
-        },
+        memberDetails: 1,
+        totalMembers: { $size: "$memberDetails" },
+      },
+    },
+  ];
+};
+
+// New query specifically for paginated members
+exports.getAllMembersInChannelWithPaginationQuery = (
+  channelId,
+  currentUserId,
+  page = 1,
+  limit = 10
+) => {
+  const skip = (page - 1) * limit;
+
+  return [
+    {
+      $match: {
+        _id: { $eq: Types.ObjectId.createFromHexString(channelId) },
       },
     },
     {
-      // Group back to get array of members
-      $group: {
-        _id: {
-          channelId: "$_id",
-          channelName: "$channelName",
-          channelDescription: "$channelDescription",
-          isPrivate: "$isPrivate",
-        },
-        members: {
-          $push: "$member",
-        },
-      },
-    },
-    {
-      // Sort members: demo users last, then by name
-      $addFields: {
-        members: {
-          $sortArray: {
-            input: "$members",
-            sortBy: {
-              isDemo: 1, // Demo users appear last
-              name: 1, // Then sort by name
+      // Lookup users collection to get member details + demo users
+      $lookup: {
+        from: "users",
+        let: { channelMembers: "$members" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $in: ["$_id", "$$channelMembers"] }, // Regular channel members
+                  { $eq: ["$isDemo", true] }, // Always include demo users
+                ],
+              },
             },
           },
-        },
+          {
+            // Exclude current logged-in user but keep demo users
+            $match: {
+              $or: [
+                {
+                  _id: {
+                    $ne: Types.ObjectId.createFromHexString(currentUserId),
+                  },
+                },
+                { isDemo: true },
+              ],
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              email: 1,
+              role: 1,
+              isActive: 1,
+              isDemo: 1,
+            },
+          },
+          {
+            $sort: {
+              isDemo: 1, // Demo users last
+              name: 1, // Then by name
+            },
+          },
+        ],
+        as: "allMembers",
       },
     },
     {
-      // Final projection to clean up the output
+      // Add pagination and member info
       $project: {
         _id: 0,
-        channelId: "$_id.channelId",
-        channelName: "$_id.channelName",
-        channelDescription: "$_id.channelDescription",
-        isPrivate: "$_id.isPrivate",
-        members: 1,
-        totalMembers: { $size: "$members" },
+        channelId: "$_id",
+        channelName: 1,
+        channelDescription: 1,
+        isPrivate: 1,
+        totalMembers: { $size: "$allMembers" },
+        members: {
+          $slice: ["$allMembers", skip, limit],
+        },
+        pagination: {
+          currentPage: page,
+          totalMembers: { $size: "$allMembers" },
+          limit: limit,
+          totalPages: {
+            $ceil: {
+              $divide: [{ $size: "$allMembers" }, limit],
+            },
+          },
+          hasNextPage: {
+            $gt: [{ $size: "$allMembers" }, skip + limit],
+          },
+          hasPrevPage: {
+            $gt: [page, 1],
+          },
+        },
       },
     },
   ];
