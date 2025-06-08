@@ -91,7 +91,7 @@ exports.getAllChannelsOfUserQuery = (userId) => {
   ];
 };
 
-// get all members in a channel with proper pagination
+// get all members in a channel
 exports.getAllMembersInChannelQuery = (channelId, currentUserId) => {
   return [
     {
@@ -138,122 +138,39 @@ exports.getAllMembersInChannelQuery = (channelId, currentUserId) => {
               isDemo: 1,
             },
           },
-          {
-            $sort: {
-              isDemo: 1, // Demo users last
-              name: 1, // Then by name
-            },
-          },
         ],
         as: "memberDetails",
       },
     },
     {
-      // Project channel info and add total count before pagination
+      // Unwind the memberDetails array to create individual member documents
+      $unwind: {
+        path: "$memberDetails",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      // Add channel info to each member document and project final structure
       $project: {
-        _id: 1,
-        channelName: 1,
-        channelDescription: 1,
-        isPrivate: 1,
-        memberDetails: 1,
-        totalMembers: { $size: "$memberDetails" },
-      },
-    },
-  ];
-};
-
-// New query specifically for paginated members
-exports.getAllMembersInChannelWithPaginationQuery = (
-  channelId,
-  currentUserId,
-  page = 1,
-  limit = 10
-) => {
-  const skip = (page - 1) * limit;
-
-  return [
-    {
-      $match: {
-        _id: { $eq: Types.ObjectId.createFromHexString(channelId) },
-      },
-    },
-    {
-      // Lookup users collection to get member details + demo users
-      $lookup: {
-        from: "users",
-        let: { channelMembers: "$members" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $or: [
-                  { $in: ["$_id", "$$channelMembers"] }, // Regular channel members
-                  { $eq: ["$isDemo", true] }, // Always include demo users
-                ],
-              },
-            },
-          },
-          {
-            // Exclude current logged-in user but keep demo users
-            $match: {
-              $or: [
-                {
-                  _id: {
-                    $ne: Types.ObjectId.createFromHexString(currentUserId),
-                  },
-                },
-                { isDemo: true },
-              ],
-            },
-          },
-          {
-            $project: {
-              _id: 1,
-              name: 1,
-              email: 1,
-              role: 1,
-              isActive: 1,
-              isDemo: 1,
-            },
-          },
-          {
-            $sort: {
-              isDemo: 1, // Demo users last
-              name: 1, // Then by name
-            },
-          },
-        ],
-        as: "allMembers",
-      },
-    },
-    {
-      // Add pagination and member info
-      $project: {
-        _id: 0,
-        channelId: "$_id",
-        channelName: 1,
-        channelDescription: 1,
-        isPrivate: 1,
-        totalMembers: { $size: "$allMembers" },
-        members: {
-          $slice: ["$allMembers", skip, limit],
+        _id: "$memberDetails._id",
+        name: "$memberDetails.name",
+        email: "$memberDetails.email",
+        role: "$memberDetails.role",
+        isActive: "$memberDetails.isActive",
+        isDemo: "$memberDetails.isDemo",
+        channelInfo: {
+          channelId: "$_id",
+          channelName: "$channelName",
+          channelDescription: "$channelDescription",
+          isPrivate: "$isPrivate",
         },
-        pagination: {
-          currentPage: page,
-          totalMembers: { $size: "$allMembers" },
-          limit: limit,
-          totalPages: {
-            $ceil: {
-              $divide: [{ $size: "$allMembers" }, limit],
-            },
-          },
-          hasNextPage: {
-            $gt: [{ $size: "$allMembers" }, skip + limit],
-          },
-          hasPrevPage: {
-            $gt: [page, 1],
-          },
-        },
+      },
+    },
+    {
+      // Sort members: demo users last, then by name
+      $sort: {
+        isDemo: 1, // Demo users appear last
+        name: 1, // Then sort by name
       },
     },
   ];

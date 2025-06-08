@@ -5,14 +5,12 @@ const {
   createTask,
   getTaskById,
   batchUpdateTask,
-  shareTask,
 } = require("../controller/task.controller");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
 const {
   validateCreateTask,
   validateBatchUpdateTask,
-  validateShareTask,
   validateTaskIdParam,
 } = require("../validation/taskValidation");
 
@@ -33,33 +31,12 @@ class TaskApi {
       createTask
     );
 
-    // Get task by ID with parameter validation (optional auth for shared tasks)
+    // Get task by ID with parameter validation
     router.get(
       "/:taskId",
-      (req, res, next) => {
-        // Optional authentication middleware
-        const authHeader =
-          req.header("accessToken") || req.session?.accessToken;
-        if (authHeader) {
-          // If auth token is provided, validate it
-          return Auth([ROLES.ADMIN, ROLES.EMPLOYEE])(req, res, next);
-        } else {
-          // If no auth token, continue as guest
-          req.user = null;
-          next();
-        }
-      },
-      validateTaskIdParam,
-      getTaskById
-    );
-
-    // Share task via email and generate link
-    router.post(
-      "/:taskId/share",
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       validateTaskIdParam,
-      validateShareTask,
-      shareTask
+      getTaskById
     );
 
     // Batch update task with validation

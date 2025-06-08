@@ -322,58 +322,22 @@ exports.getAllMembersInChannel = async (req, res, next) => {
       });
     }
 
-    // Parse pagination parameters
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 10;
-
-    // Use the new pagination query
-    const {
-      getAllMembersInChannelWithPaginationQuery,
-    } = require("./queries/channelQueries");
-    const membersQuery = getAllMembersInChannelWithPaginationQuery(
-      channelId,
-      currentUserId,
-      pageNum,
-      limitNum
-    );
-
-    // Use getAllChannelsDetails to execute the aggregation
+    const membersQuery = getAllMembersInChannelQuery(channelId, currentUserId);
     const result = await getAllChannelsDetails({
       query: membersQuery,
-      page: 1, // We handle pagination in the query itself
-      limit: 1, // We only expect one channel document
-      responseKey: "channel",
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      responseKey: "members",
     });
 
-    if (!result.channel || result.channel.length === 0) {
-      return next({
-        statusCode: STATUS_CODES.NOT_FOUND,
-        message: "Channel not found or no members",
-      });
-    }
-
-    // Extract the channel data (first and only result)
-    const channelData = result.channel[0];
-
-    // Restructure response to have members at the root level
-    const response = {
-      channelId: channelData.channelId,
-      channelName: channelData.channelName,
-      channelDescription: channelData.channelDescription,
-      isPrivate: channelData.isPrivate,
-      members: channelData.members,
-      totalMembers: channelData.totalMembers,
-      pagination: channelData.pagination,
-    };
-
     return generateResponse(
-      response,
+      result,
       "Members fetched successfully",
       res,
       STATUS_CODES.SUCCESS
     );
   } catch (error) {
-    console.error("Error in getAllMembersInChannel:", error);
+    console.log(error);
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message,
