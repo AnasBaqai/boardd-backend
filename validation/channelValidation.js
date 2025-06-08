@@ -73,16 +73,24 @@ const updateChannelValidation = Joi.object({
 
 // Add user to channel validation schema
 const addUserToChannelValidation = Joi.object({
-  email: Joi.string().email().required().messages({
-    "string.email": "Email must be a valid email address",
-    "any.required": "Email is required",
-  }),
+  emails: Joi.array()
+    .items(
+      Joi.string().email().messages({
+        "string.email": "Each email must be a valid email address",
+      })
+    )
+    .min(1)
+    .max(50)
+    .required()
+    .messages({
+      "array.base": "Emails must be an array of email addresses",
+      "array.min": "At least one email is required",
+      "array.max": "Cannot add more than 50 users at once",
+      "any.required": "Emails array is required",
+    }),
 
-  channelToken: Joi.string().trim().min(10).max(100).required().messages({
-    "string.empty": "Channel token is required",
-    "string.min": "Channel token must be at least 10 characters long",
-    "string.max": "Channel token cannot exceed 100 characters",
-    "any.required": "Channel token is required",
+  channelId: helpers.objectIdValidation.required().messages({
+    "any.required": "Channel ID is required",
   }),
 });
 

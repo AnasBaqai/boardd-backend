@@ -1,5 +1,5 @@
 const { findUser } = require("../models/userModel");
-const { parseBody } = require("../utils");
+const { parseBody, extractDomainFromEmail } = require("../utils");
 const { generateJoinToken } = require("./helpers/users/signup.helper");
 const {
   createChannel,
@@ -112,13 +112,35 @@ exports.getChannelJoiningLink = async (req, res, next) => {
   }
 };
 
-// add user to the channel
+// add multiple users to the channel
 exports.addUserToChannel = async (req, res, next) => {
   try {
-    const { email, channelToken } = parseBody(req.body);
+    const { emails, channelId } = parseBody(req.body);
     const requestingUserId = req.user.id; // Get ID of user making the request
 
-    const channel = await findChannel({ channelToken });
+    // Validate emails array
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Emails array is required and must not be empty",
+      });
+    }
+
+    // Remove duplicates and validate email format
+    const uniqueEmails = [...new Set(emails)];
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = uniqueEmails.filter(
+      (email) => !emailRegex.test(email)
+    );
+
+    if (invalidEmails.length > 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: `Invalid email format: ${invalidEmails.join(", ")}`,
+      });
+    }
+
+    const channel = await findChannel({ _id: channelId });
     if (!channel) {
       return next({
         statusCode: STATUS_CODES.NOT_FOUND,
@@ -126,35 +148,11 @@ exports.addUserToChannel = async (req, res, next) => {
       });
     }
 
-    // Check if requesting user is the channel creator
-    if (channel.createdBy.toString() !== requestingUserId.toString()) {
+    // check if requesting user is a member of the channel
+    if (!channel?.members?.includes(requestingUserId)) {
       return next({
         statusCode: STATUS_CODES.FORBIDDEN,
-        message: "Only channel creator can add members",
-      });
-    }
-
-    const user = await findUser({ email });
-    if (!user) {
-      return next({
-        statusCode: STATUS_CODES.NOT_FOUND,
-        message: "User not found",
-      });
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return next({
-        statusCode: STATUS_CODES.FORBIDDEN,
-        message: "Cannot add inactive user to channel",
-      });
-    }
-
-    // check if user is already a member of the channel
-    if (channel?.members?.includes(user._id)) {
-      return next({
-        statusCode: STATUS_CODES.CONFLICT,
-        message: "User already a member of the channel",
+        message: "Only members of the channel can add users",
       });
     }
 
@@ -167,31 +165,128 @@ exports.addUserToChannel = async (req, res, next) => {
       });
     }
 
-    // Check if user's email domain matches company domain
-    const userDomain = email.split("@")[1];
-    if (userDomain !== company.domain) {
-      return next({
-        statusCode: STATUS_CODES.FORBIDDEN,
-        message: "User's email domain does not match company domain",
-      });
+    // Process each email and collect results
+    const addedUsers = [];
+    const errors = [];
+    const usersToAdd = []; // Store valid user IDs to add to channel
+
+    for (const email of uniqueEmails) {
+      try {
+        // Find user by email
+        const user = await findUser({ email });
+        if (!user) {
+          errors.push(`User with email ${email} not found`);
+          continue;
+        }
+
+        // Check if user is already a member of the company
+        if (user.companyId.toString() !== channel.companyId.toString()) {
+          errors.push(`User ${email} is not a member of the company`);
+          continue;
+        }
+
+        // Check if user is active
+        if (!user.isActive) {
+          errors.push(`Cannot add inactive user: ${email}`);
+          continue;
+        }
+
+        // Check if user is already a member of the channel
+        if (channel?.members?.includes(user._id)) {
+          errors.push(`User ${email} is already a member of the channel`);
+          continue;
+        }
+
+        // Check if user's email domain matches company domain
+        const userDomain = extractDomainFromEmail(email);
+        if (userDomain !== company.domain) {
+          errors.push(`User ${email} domain does not match company domain`);
+          continue;
+        }
+
+        // If all validations pass, add to arrays
+        usersToAdd.push(user._id);
+        addedUsers.push({
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        });
+      } catch (userError) {
+        console.error(`Error processing user ${email}:`, userError);
+        errors.push(`Failed to process user ${email}: ${userError.message}`);
+      }
     }
 
-    // add user to the channel
-    const updatedChannel = await addMemberToChannel(
-      { _id: channel._id },
-      { $push: { members: user._id } }
-    );
-    return generateResponse(
-      updatedChannel,
-      "User added to the channel",
-      res,
-      STATUS_CODES.SUCCESS
-    );
+    // Add all valid users to channel in a single operation
+    let updatedChannel;
+    if (usersToAdd.length > 0) {
+      try {
+        updatedChannel = await addMemberToChannel(
+          { _id: channel._id },
+          { $push: { members: { $each: usersToAdd } } }
+        );
+      } catch (updateError) {
+        return next({
+          statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+          message: `Failed to update channel: ${updateError.message}`,
+        });
+      }
+    }
+
+    // Prepare response
+    const response = {
+      addedUsers,
+      totalAdded: addedUsers.length,
+      totalRequested: uniqueEmails.length,
+      channelId: channel._id,
+      channelName: channel.channelName,
+    };
+
+    if (errors.length > 0) {
+      response.errors = errors;
+      response.failed = errors.length;
+    }
+
+    // Determine response status and message
+    if (addedUsers.length === 0 && errors.length > 0) {
+      // No users added due to errors
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: `Failed to add any users to the channel: ${errors.join(", ")}`,
+        errors,
+      });
+    } else if (addedUsers.length === 0) {
+      // No users to add (all were already members or duplicates)
+      return generateResponse(
+        response,
+        "No new users to add to the channel",
+        res,
+        STATUS_CODES.SUCCESS
+      );
+    } else if (errors.length > 0) {
+      // Partial success - some added, some failed
+      const message = `${addedUsers.length} users added successfully. ${errors.length} users failed to be added.`;
+      return generateResponse(
+        response,
+        message,
+        res,
+        STATUS_CODES.PARTIAL_CONTENT
+      );
+    } else {
+      // All users added successfully
+      return generateResponse(
+        response,
+        "All users added to the channel successfully",
+        res,
+        STATUS_CODES.SUCCESS
+      );
+    }
   } catch (error) {
-    console.log(error);
+    console.error("Error in addUserToChannel:", error);
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
-      message: error?.message,
+      message: error?.message ?? "Failed to add users to channel",
     });
   }
 };
