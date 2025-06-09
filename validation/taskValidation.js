@@ -250,10 +250,40 @@ const validateRequest = (schema, source = "body") => {
   };
 };
 
+// Share task validation schema
+const shareTaskValidation = Joi.object({
+  emails: Joi.array()
+    .items(
+      Joi.string().email().messages({
+        "string.email": "Each email must be a valid email address",
+      })
+    )
+    .min(0)
+    .max(20)
+    .optional()
+    .messages({
+      "array.base": "Emails must be an array of email addresses",
+      "array.max": "Cannot share with more than 20 people at once",
+    }),
+
+  message: Joi.string().trim().max(500).optional().messages({
+    "string.max": "Message cannot exceed 500 characters",
+  }),
+
+  shareType: Joi.string()
+    .valid("link", "email", "both")
+    .optional()
+    .default("both")
+    .messages({
+      "any.only": "Share type must be one of: link, email, both",
+    }),
+});
+
 module.exports = {
   validateCreateTask: validateRequest(createTaskValidation),
   validateBatchUpdateTask: validateRequest(batchUpdateTaskValidation),
   validateTaskIdParam: validateRequest(taskIdParamValidation, "params"),
+  validateShareTask: validateRequest(shareTaskValidation),
 
   // Export schemas for testing or custom usage
   schemas: {
@@ -261,5 +291,6 @@ module.exports = {
     batchUpdateTaskValidation,
     taskIdParamValidation,
     customFieldSchema,
+    shareTaskValidation,
   },
 };

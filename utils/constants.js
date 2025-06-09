@@ -53,7 +53,7 @@ exports.SOURCE = Object.freeze({
 });
 
 exports.CHANNEL_PREFERENCE = Object.freeze({
-  TASK_MANAGEMENT: "task management",
+  TEAM_MANAGEMENT: "team management",
   CLIENT_MANAGEMENT: "client management",
   FORM_BUILDER: "form builder",
   WORK_IN_PROGRESS: "work in progress",
@@ -79,7 +79,7 @@ exports.PRIVACY = Object.freeze({
 });
 
 exports.DEFAULT_TABS = Object.freeze({
-  TASK_MANAGEMENT: "task management",
+  TEAM_MANAGEMENT: "team management",
   CLIENT_MANAGEMENT: "client management",
   FORM_BUILDER: "form builder",
   WORK_IN_PROGRESS: "work in progress",

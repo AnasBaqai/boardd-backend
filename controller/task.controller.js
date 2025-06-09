@@ -209,8 +209,9 @@ exports.createTask = async (req, res, next) => {
 exports.getTaskById = async (req, res, next) => {
   try {
     const { taskId } = req.params;
+    const userId = req.user?.id || null; // Handle both authenticated and guest access
 
-    const query = getTaskByIdQuery(taskId);
+    const query = getTaskByIdQuery(taskId, userId);
     const result = await getAllTasks({
       query,
       page: 1,
@@ -454,6 +455,202 @@ exports.batchUpdateTask = async (req, res, next) => {
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message,
+    });
+  }
+};
+
+/**
+ * Share task with multiple users via email and generate shareable link
+ */
+exports.shareTask = async (req, res, next) => {
+  try {
+    const { taskId } = req.params;
+    const { emails, message, shareType = "both" } = parseBody(req.body);
+    const userId = req.user.id;
+
+    // Validate task exists and user has access
+    const task = await findTask({ _id: taskId });
+    if (!task) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Task not found",
+      });
+    }
+
+    // Get project and validate user access
+    const project = await findProject({ _id: task.projectId });
+    if (!project) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Project not found",
+      });
+    }
+
+    // Get tab and validate user is member
+    const tab = await findChannelTab({ _id: project.tabId });
+    if (!tab) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Tab not found",
+      });
+    }
+
+    // Check if user has permission to share (must be tab member, channel member, or assigned)
+    const channel = await findChannel({ _id: project.channelId });
+    if (!channel) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
+    }
+
+    const canShare =
+      channel.members.includes(userId) ||
+      tab.members.includes(userId) ||
+      task.assignedTo.includes(userId) ||
+      task.createdBy.toString() === userId;
+
+    if (!canShare) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You don't have permission to share this task",
+      });
+    }
+
+    // Get current user for context
+    const currentUser = await findUser({ _id: userId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
+    // Generate shareable link
+    const shareLink = `${
+      process.env.FRONTEND_URL || "http://localhost:3000"
+    }/shared/task/${taskId}`;
+
+    // Prepare response
+    const response = {
+      shareLink,
+      task: {
+        id: task._id,
+        title: task.title,
+        contextPath: `${channel.channelName} / ${tab.tabName} / ${project.name}`,
+      },
+      sharedBy: {
+        name: currentUser.name,
+        email: currentUser.email,
+      },
+    };
+
+    // Handle email sharing if emails provided
+    if (
+      emails &&
+      Array.isArray(emails) &&
+      emails.length > 0 &&
+      (shareType === "email" || shareType === "both")
+    ) {
+      // Validate emails array
+      const uniqueEmails = [...new Set(emails)];
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const invalidEmails = uniqueEmails.filter(
+        (email) => !emailRegex.test(email)
+      );
+
+      if (invalidEmails.length > 0) {
+        return next({
+          statusCode: STATUS_CODES.BAD_REQUEST,
+          message: `Invalid email format: ${invalidEmails.join(", ")}`,
+        });
+      }
+
+      const emailResults = [];
+      const emailErrors = [];
+
+      // Process each email
+      for (const email of uniqueEmails) {
+        try {
+          // Here you would integrate with your email service
+          // For now, we'll simulate email sending
+
+          const emailData = {
+            to: email,
+            subject: `${currentUser.name} shared a task with you: ${task.title}`,
+            template: "task-share",
+            data: {
+              taskTitle: task.title,
+              taskDescription: task.description,
+              sharedByName: currentUser.name,
+              shareLink,
+              contextPath: `${channel.channelName} / ${tab.tabName} / ${project.name}`,
+              customMessage: message || "",
+            },
+          };
+
+          // Simulate email sending (replace with actual email service)
+          console.log("Sending email:", emailData);
+          emailResults.push(email);
+        } catch (emailError) {
+          console.error(`Failed to send email to ${email}:`, emailError);
+          emailErrors.push(
+            `Failed to send email to ${email}: ${emailError.message}`
+          );
+        }
+      }
+
+      response.emailResults = {
+        sent: emailResults,
+        failed: emailErrors,
+        totalSent: emailResults.length,
+        totalRequested: uniqueEmails.length,
+      };
+
+      if (emailErrors.length > 0) {
+        response.emailResults.errors = emailErrors;
+      }
+    }
+
+    // Create activity for task sharing
+    const activityMessage = `${currentUser.name} shared this task${
+      emails && emails.length > 0 ? ` with ${emails.length} people` : ""
+    }`;
+    await createActivity({
+      projectId: task.projectId,
+      taskId: task._id,
+      userId,
+      actionType: "SHARE_TASK",
+      message: activityMessage,
+      timestamp: new Date(),
+    });
+
+    // Determine response message
+    let responseMessage = "Task shared successfully";
+    if (shareType === "email" && response.emailResults) {
+      const { totalSent, totalRequested } = response.emailResults;
+      if (totalSent === totalRequested) {
+        responseMessage = `Task shared via email with ${totalSent} recipients`;
+      } else if (totalSent > 0) {
+        responseMessage = `Task shared with ${totalSent} out of ${totalRequested} recipients`;
+      } else {
+        responseMessage = "Failed to send task emails";
+      }
+    } else if (shareType === "both" && response.emailResults) {
+      responseMessage = `Task link generated and shared via email with ${response.emailResults.totalSent} recipients`;
+    }
+
+    return generateResponse(
+      response,
+      responseMessage,
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error in shareTask:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to share task",
     });
   }
 };
