@@ -53,7 +53,7 @@ exports.SOURCE = Object.freeze({
 });
 
 exports.CHANNEL_PREFERENCE = Object.freeze({
-  TEAM_MANAGEMENT: "team management",
+  TASK_MANAGEMENT: "task management",
   CLIENT_MANAGEMENT: "client management",
   FORM_BUILDER: "form builder",
   WORK_IN_PROGRESS: "work in progress",

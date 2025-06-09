@@ -20,6 +20,8 @@ const {
 } = require("./helpers/tasks/task.helper");
 const { getTaskByIdQuery } = require("./queries/tasksQueries");
 const { getAllTasks } = require("../models/taskModel");
+const Mailer = require("../utils/mailer");
+const { generateTaskShareEmail } = require("../utils/emailTemplates");
 
 /**
  * Create a new task
@@ -566,31 +568,37 @@ exports.shareTask = async (req, res, next) => {
         });
       }
 
+      if (uniqueEmails.length > 20) {
+        return next({
+          statusCode: STATUS_CODES.BAD_REQUEST,
+          message: "Cannot share with more than 20 recipients at once",
+        });
+      }
+
       const emailResults = [];
       const emailErrors = [];
+
+      // Generate email template
+      const emailTemplate = generateTaskShareEmail({
+        taskTitle: task.title,
+        taskDescription: task.description,
+        sharedByName: currentUser.name,
+        shareLink,
+        contextPath: `${channel.channelName} / ${tab.tabName} / ${project.name}`,
+        customMessage: message || "",
+      });
 
       // Process each email
       for (const email of uniqueEmails) {
         try {
-          // Here you would integrate with your email service
-          // For now, we'll simulate email sending
-
-          const emailData = {
-            to: email,
+          await Mailer.sendEmail({
+            email: email,
             subject: `${currentUser.name} shared a task with you: ${task.title}`,
-            template: "task-share",
-            data: {
-              taskTitle: task.title,
-              taskDescription: task.description,
-              sharedByName: currentUser.name,
-              shareLink,
-              contextPath: `${channel.channelName} / ${tab.tabName} / ${project.name}`,
-              customMessage: message || "",
-            },
-          };
+            message: emailTemplate.text,
+            html: emailTemplate.html,
+            replyTo: currentUser.email,
+          });
 
-          // Simulate email sending (replace with actual email service)
-          console.log("Sending email:", emailData);
           emailResults.push(email);
         } catch (emailError) {
           console.error(`Failed to send email to ${email}:`, emailError);
@@ -611,19 +619,6 @@ exports.shareTask = async (req, res, next) => {
         response.emailResults.errors = emailErrors;
       }
     }
-
-    // Create activity for task sharing
-    const activityMessage = `${currentUser.name} shared this task${
-      emails && emails.length > 0 ? ` with ${emails.length} people` : ""
-    }`;
-    await createActivity({
-      projectId: task.projectId,
-      taskId: task._id,
-      userId,
-      actionType: "SHARE_TASK",
-      message: activityMessage,
-      timestamp: new Date(),
-    });
 
     // Determine response message
     let responseMessage = "Task shared successfully";
