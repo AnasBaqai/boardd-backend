@@ -198,6 +198,16 @@ const tabIdParamValidation = Joi.object({
   }),
 });
 
+// Channel and Tab ID parameter validation for projects route
+const channelTabParamValidation = Joi.object({
+  channelId: helpers.objectIdValidation.required().messages({
+    "any.required": "Channel ID is required",
+  }),
+  tabId: helpers.objectIdValidation.required().messages({
+    "any.required": "Tab ID is required",
+  }),
+});
+
 // Query validation for getting projects
 const getProjectsQueryValidation = Joi.object({
   tabId: helpers.objectIdValidation.optional().messages({
@@ -331,6 +341,10 @@ module.exports = {
   validateUpdateProject: validateRequest(updateProjectValidation),
   validateProjectIdParam: validateRequest(projectIdParamValidation, "params"),
   validateTabIdParam: validateRequest(tabIdParamValidation, "params"),
+  validateChannelTabParams: validateRequest(
+    channelTabParamValidation,
+    "params"
+  ),
   validateGetProjectsQuery: validateRequest(
     getProjectsQueryValidation,
     "query"
@@ -342,6 +356,7 @@ module.exports = {
     updateProjectValidation,
     projectIdParamValidation,
     tabIdParamValidation,
+    channelTabParamValidation,
     getProjectsQueryValidation,
   },
 };

@@ -140,6 +140,32 @@ exports.addUserToChannel = async (req, res, next) => {
       });
     }
 
+    // Filter out demo user email and track for response
+    const DEMO_EMAIL = "uncle@boardd.demo";
+    const demoEmailsFound = uniqueEmails.filter(
+      (email) => email.toLowerCase() === DEMO_EMAIL.toLowerCase()
+    );
+    const nonDemoEmails = uniqueEmails.filter(
+      (email) => email.toLowerCase() !== DEMO_EMAIL.toLowerCase()
+    );
+
+    // Handle edge case: Only demo email(s) provided
+    if (nonDemoEmails.length === 0 && demoEmailsFound.length > 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message:
+          "Uncle is a demo user and cannot be added to channels. Please provide other user emails.",
+      });
+    }
+
+    // Handle edge case: No valid emails after filtering
+    if (nonDemoEmails.length === 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "No valid user emails provided",
+      });
+    }
+
     const channel = await findChannel({ _id: channelId });
     if (!channel) {
       return next({
@@ -165,12 +191,21 @@ exports.addUserToChannel = async (req, res, next) => {
       });
     }
 
-    // Process each email and collect results
+    // Process each email and collect results (now using nonDemoEmails)
     const addedUsers = [];
     const errors = [];
     const usersToAdd = []; // Store valid user IDs to add to channel
 
-    for (const email of uniqueEmails) {
+    // Add demo user filtering notice to errors if demo emails were found
+    if (demoEmailsFound.length > 0) {
+      errors.push(
+        `Uncle (demo user) cannot be added to channels - filtered out ${
+          demoEmailsFound.length
+        } demo email${demoEmailsFound.length > 1 ? "s" : ""}`
+      );
+    }
+
+    for (const email of nonDemoEmails) {
       try {
         // Find user by email
         const user = await findUser({ email });
@@ -238,10 +273,16 @@ exports.addUserToChannel = async (req, res, next) => {
     const response = {
       addedUsers,
       totalAdded: addedUsers.length,
-      totalRequested: uniqueEmails.length,
+      totalRequested: uniqueEmails.length, // Original total including demo emails
+      totalProcessed: nonDemoEmails.length, // Total after filtering demo emails
       channelId: channel._id,
       channelName: channel.channelName,
     };
+
+    // Add demo filtering info to response if demo emails were found
+    if (demoEmailsFound.length > 0) {
+      response.filteredDemoEmails = demoEmailsFound.length;
+    }
 
     if (errors.length > 0) {
       response.errors = errors;
@@ -257,16 +298,17 @@ exports.addUserToChannel = async (req, res, next) => {
         errors,
       });
     } else if (addedUsers.length === 0) {
-      // No users to add (all were already members or duplicates)
-      return generateResponse(
-        response,
-        "No new users to add to the channel",
-        res,
-        STATUS_CODES.SUCCESS
-      );
+      // No users to add (all were already members, demo users, or duplicates)
+      const message =
+        demoEmailsFound.length > 0
+          ? "No new users to add to the channel (demo users were filtered out)"
+          : "No new users to add to the channel";
+      return generateResponse(response, message, res, STATUS_CODES.SUCCESS);
     } else if (errors.length > 0) {
       // Partial success - some added, some failed
-      const message = `${addedUsers.length} users added successfully. ${errors.length} users failed to be added.`;
+      const demoNote =
+        demoEmailsFound.length > 0 ? " (demo users were filtered out)" : "";
+      const message = `${addedUsers.length} users added successfully. ${errors.length} users failed to be added${demoNote}.`;
       return generateResponse(
         response,
         message,
@@ -275,12 +317,10 @@ exports.addUserToChannel = async (req, res, next) => {
       );
     } else {
       // All users added successfully
-      return generateResponse(
-        response,
-        "All users added to the channel successfully",
-        res,
-        STATUS_CODES.SUCCESS
-      );
+      const demoNote =
+        demoEmailsFound.length > 0 ? " (demo users were filtered out)" : "";
+      const message = `All users added to the channel successfully${demoNote}`;
+      return generateResponse(response, message, res, STATUS_CODES.SUCCESS);
     }
   } catch (error) {
     console.error("Error in addUserToChannel:", error);

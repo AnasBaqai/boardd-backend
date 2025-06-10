@@ -75,9 +75,24 @@ const updateChannelValidation = Joi.object({
 const addUserToChannelValidation = Joi.object({
   emails: Joi.array()
     .items(
-      Joi.string().email().messages({
-        "string.email": "Each email must be a valid email address",
-      })
+      Joi.string()
+        .custom((value, helpers) => {
+          // Allow the specific demo email
+          if (value.toLowerCase() === "uncle@boardd.demo") {
+            return value;
+          }
+
+          // For all other emails, use standard email validation
+          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+          if (!emailPattern.test(value)) {
+            return helpers.error("string.email");
+          }
+
+          return value;
+        })
+        .messages({
+          "string.email": "Each email must be a valid email address",
+        })
     )
     .min(1)
     .max(50)

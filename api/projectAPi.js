@@ -1,7 +1,10 @@
 "use strict";
 
 const { Router } = require("express");
-const { CreateProject } = require("../controller/projectController");
+const {
+  CreateProject,
+  getProjectsOfTab,
+} = require("../controller/projectController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
 const {
@@ -26,6 +29,14 @@ class ProjectAPI {
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       validateCreateProject,
       CreateProject
+    );
+
+    // Get projects of a specific tab
+    router.get(
+      "/tab/:channelId/:tabId",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.VIEWER]),
+      validateGetProjectsQuery,
+      getProjectsOfTab
     );
   }
 
