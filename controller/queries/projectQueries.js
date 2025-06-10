@@ -1,7 +1,293 @@
 const { Types } = require("mongoose");
 
 /**
- * Get projects of a tab with tasks grouped by status
+ * Get tasks calendar view for a specific month (lightweight for calendar strips)
+ * @param {string} channelId - Channel ID
+ * @param {string} tabId - Tab ID
+ * @param {string} userId - Current user ID
+ * @param {Date} currentDate - Date in the month to show
+ * @returns {Array} Aggregation pipeline
+ */
+exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
+  // Calculate start and end of the month
+  const startOfMonth = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    1
+  );
+  const endOfMonth = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth() + 1,
+    0
+  );
+
+  return [
+    // Match projects by channelId and tabId
+    {
+      $match: {
+        channelId: Types.ObjectId.createFromHexString(channelId),
+        tabId: Types.ObjectId.createFromHexString(tabId),
+        status: "active", // Only active projects
+      },
+    },
+
+    // Lookup tasks for these projects
+    {
+      $lookup: {
+        from: "tasks",
+        localField: "_id",
+        foreignField: "projectId",
+        as: "tasks",
+        pipeline: [
+          {
+            $match: {
+              isActive: true,
+              dueDate: { $exists: true, $ne: null },
+              // Filter tasks for the specific month
+              dueDate: {
+                $gte: startOfMonth,
+                $lte: endOfMonth,
+              },
+              // User must be assigned to task OR created the task
+              $or: [
+                { assignedTo: Types.ObjectId.createFromHexString(userId) },
+                { createdBy: Types.ObjectId.createFromHexString(userId) },
+              ],
+            },
+          },
+          // Project minimal task fields for calendar strips
+          {
+            $project: {
+              _id: 1,
+              title: 1,
+              status: 1,
+              priority: 1,
+              dueDate: 1,
+              strokeColor: 1,
+              isOverdue: {
+                $cond: {
+                  if: {
+                    $and: [
+                      { $ne: ["$dueDate", null] },
+                      { $lt: ["$dueDate", new Date()] },
+                      { $ne: ["$status", "completed"] },
+                    ],
+                  },
+                  then: true,
+                  else: false,
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+
+    // Unwind tasks to work with individual tasks
+    {
+      $unwind: {
+        path: "$tasks",
+        preserveNullAndEmptyArrays: false, // Only projects with tasks
+      },
+    },
+
+    // Project the final lightweight task structure
+    {
+      $project: {
+        _id: "$tasks._id",
+        title: "$tasks.title",
+        status: "$tasks.status",
+        priority: "$tasks.priority",
+        dueDate: "$tasks.dueDate",
+        strokeColor: "$tasks.strokeColor",
+        isOverdue: "$tasks.isOverdue",
+        // Minimal project context
+        project: {
+          _id: "$_id",
+          name: "$name",
+          color: "$color",
+        },
+      },
+    },
+
+    // Sort by due date
+    {
+      $sort: {
+        dueDate: 1, // Earliest first
+        priority: -1, // High priority first for same date
+      },
+    },
+  ];
+};
+
+/**
+ * Get projects overview of a tab (minimal data)
+ * @param {string} channelId - Channel ID
+ * @param {string} tabId - Tab ID
+ * @returns {Array} Aggregation pipeline
+ */
+exports.getProjectsOverviewQuery = (channelId, tabId) => {
+  return [
+    // Match projects by channelId and tabId
+    {
+      $match: {
+        channelId: Types.ObjectId.createFromHexString(channelId),
+        tabId: Types.ObjectId.createFromHexString(tabId),
+        status: "active", // Only active projects
+      },
+    },
+
+    // Lookup project creator details
+    {
+      $lookup: {
+        from: "users",
+        localField: "createdBy",
+        foreignField: "_id",
+        as: "creator",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              email: 1,
+            },
+          },
+        ],
+      },
+    },
+
+    // Lookup task counts for progress calculation (minimal lookup)
+    {
+      $lookup: {
+        from: "tasks",
+        localField: "_id",
+        foreignField: "projectId",
+        as: "taskCounts",
+        pipeline: [
+          {
+            $match: {
+              isActive: true,
+            },
+          },
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+            },
+          },
+        ],
+      },
+    },
+
+    // Calculate progress from task counts
+    {
+      $addFields: {
+        taskStats: {
+          $reduce: {
+            input: "$taskCounts",
+            initialValue: { total: 0, completed: 0 },
+            in: {
+              total: { $add: ["$$value.total", "$$this.count"] },
+              completed: {
+                $cond: [
+                  { $eq: ["$$this._id", "completed"] },
+                  { $add: ["$$value.completed", "$$this.count"] },
+                  "$$value.completed",
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+
+    // Calculate progress percentage
+    {
+      $addFields: {
+        progress: {
+          $cond: {
+            if: { $eq: ["$taskStats.total", 0] },
+            then: 0,
+            else: {
+              $multiply: [
+                {
+                  $divide: ["$taskStats.completed", "$taskStats.total"],
+                },
+                100,
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    // Unwind creator array
+    {
+      $unwind: {
+        path: "$creator",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // Project minimal fields for overview
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        priority: 1,
+        color: 1,
+        startDate: 1,
+        endDate: 1,
+        createdAt: 1,
+        creator: 1,
+        progress: {
+          $round: ["$progress", 1], // Round to 1 decimal place
+        },
+        taskCount: "$taskStats.total",
+        // Project status indicators
+        isOverdue: {
+          $cond: {
+            if: {
+              $and: [
+                { $ne: ["$endDate", null] },
+                { $lt: ["$endDate", new Date()] },
+                { $ne: ["$status", "completed"] },
+              ],
+            },
+            then: true,
+            else: false,
+          },
+        },
+        daysUntilDue: {
+          $cond: {
+            if: { $ne: ["$endDate", null] },
+            then: {
+              $ceil: {
+                $divide: [
+                  { $subtract: ["$endDate", new Date()] },
+                  1000 * 60 * 60 * 24, // Convert milliseconds to days
+                ],
+              },
+            },
+            else: null,
+          },
+        },
+      },
+    },
+
+    // Sort projects by priority and due date
+    {
+      $sort: {
+        priority: -1, // high, medium, low
+        endDate: 1, // earliest first
+        createdAt: -1, // newest first if no due date
+      },
+    },
+  ];
+};
+
+/**
+ * Get projects of a tab with tasks grouped by status (detailed data)
  * @param {string} channelId - Channel ID
  * @param {string} tabId - Tab ID
  * @returns {Array} Aggregation pipeline

@@ -210,6 +210,27 @@ const channelTabParamValidation = Joi.object({
 
 // Query validation for getting projects
 const getProjectsQueryValidation = Joi.object({
+  view: Joi.string()
+    .valid("overview", "list", "calendar")
+    .optional()
+    .default("list")
+    .messages({
+      "any.only": "View must be one of: overview, list, calendar",
+    }),
+
+  // Calendar view parameters
+  currentDate: Joi.date()
+    .optional()
+    .when("view", {
+      is: "calendar",
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    })
+    .messages({
+      "date.base": "Current date must be a valid date",
+      "any.required": "Current date is required for calendar view",
+    }),
+
   tabId: helpers.objectIdValidation.optional().messages({
     "string.pattern.base": "Tab ID must be a valid ObjectId",
   }),

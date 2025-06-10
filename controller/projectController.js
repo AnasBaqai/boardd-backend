@@ -4,7 +4,11 @@ const { createProject, getAllProjects } = require("../models/projectModel");
 const { findUser } = require("../models/userModel");
 const { parseBody, generateResponse, formatDate } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
-const { getProjectsOfTabQuery } = require("./queries/projectQueries");
+const {
+  getProjectsOfTabQuery,
+  getProjectsOverviewQuery,
+  getTasksCalendarQuery,
+} = require("./queries/projectQueries");
 
 exports.CreateProject = async (req, res, next) => {
   try {
@@ -51,11 +55,11 @@ exports.CreateProject = async (req, res, next) => {
   }
 };
 
-// Get projects of a tab with tasks grouped by status
+// Get projects of a tab with conditional view (overview or detailed list)
 exports.getProjectsOfTab = async (req, res, next) => {
   try {
     const { channelId, tabId } = req.params;
-    const { page, limit } = req.query;
+    const { page, limit, view, currentDate } = req.query;
     const userId = req.user.id;
 
     // Validate user exists
@@ -105,20 +109,162 @@ exports.getProjectsOfTab = async (req, res, next) => {
       });
     }
 
-    // Get aggregation query
-    const query = getProjectsOfTabQuery(channelId, tabId);
+    // Handle calendar view separately
+    if (view === "calendar") {
+      return handleCalendarView(req, res, next, {
+        channelId,
+        tabId,
+        userId,
+        currentDate: new Date(currentDate),
+        channel,
+        tab,
+        user,
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 100, // Higher default for calendar
+      });
+    }
+
+    // Choose query based on view parameter
+    let query;
+    let responseKey = "projects";
+
+    if (view === "overview") {
+      query = getProjectsOverviewQuery(channelId, tabId);
+      responseKey = "projects"; // Same key but different data structure
+    } else {
+      // Default to detailed list view
+      query = getProjectsOfTabQuery(channelId, tabId);
+    }
 
     // Fetch projects with pagination
     const result = await getAllProjects({
       query,
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
-      responseKey: "projects",
+      responseKey,
     });
 
-    // Add context information to response
+    // Prepare response data based on view
+    let responseData;
+
+    if (view === "overview") {
+      // Overview response - minimal data
+      responseData = {
+        ...result,
+        view: "overview",
+        context: {
+          channel: {
+            id: channel._id,
+            name: channel.channelName,
+          },
+          tab: {
+            id: tab._id,
+            name: tab.tabName,
+          },
+        },
+        summary: {
+          totalProjects: result.pagination.totalDocs,
+          projectsWithTasks: result.projects.filter((p) => p.taskCount > 0)
+            .length,
+          totalTasks: result.projects.reduce((sum, p) => sum + p.taskCount, 0),
+          averageProgress:
+            result.projects.length > 0
+              ? Math.round(
+                  (result.projects.reduce((sum, p) => sum + p.progress, 0) /
+                    result.projects.length) *
+                    10
+                ) / 10
+              : 0,
+        },
+      };
+    } else {
+      // Detailed list response - full data with tasks
+      responseData = {
+        ...result,
+        view: "list",
+        context: {
+          channel: {
+            id: channel._id,
+            name: channel.channelName,
+          },
+          tab: {
+            id: tab._id,
+            name: tab.tabName,
+          },
+        },
+        summary: {
+          totalProjects: result.pagination.totalDocs,
+          projectsWithTasks: result.projects.filter(
+            (p) => p.taskStats.total > 0
+          ).length,
+          totalTasks: result.projects.reduce(
+            (sum, p) => sum + p.taskStats.total,
+            0
+          ),
+          completedTasks: result.projects.reduce(
+            (sum, p) => sum + p.taskStats.completed,
+            0
+          ),
+          overdueTasks: result.projects.reduce(
+            (sum, p) => sum + p.taskStats.overdue,
+            0
+          ),
+        },
+      };
+    }
+
+    const message =
+      view === "overview"
+        ? "Projects overview fetched successfully"
+        : "Projects with tasks fetched successfully";
+
+    return generateResponse(responseData, message, res, STATUS_CODES.SUCCESS);
+  } catch (error) {
+    console.error("Error in getProjectsOfTab:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to fetch projects",
+    });
+  }
+};
+
+// Helper function to handle calendar view
+const handleCalendarView = async (req, res, next, params) => {
+  try {
+    const {
+      channelId,
+      tabId,
+      userId,
+      currentDate,
+      channel,
+      tab,
+      user,
+      page,
+      limit,
+    } = params;
+
+    // Get calendar query for tasks
+    const query = getTasksCalendarQuery(channelId, tabId, userId, currentDate);
+
+    // Fetch tasks with pagination
+    const result = await getAllProjects({
+      query,
+      page,
+      limit,
+      responseKey: "tasks",
+    });
+
+    // Calculate month boundaries for context
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+
+    // Prepare lightweight calendar response
     const responseData = {
-      ...result,
+      tasks: result.tasks,
+      pagination: result.pagination,
+      view: "calendar",
       context: {
         channel: {
           id: channel._id,
@@ -128,37 +274,31 @@ exports.getProjectsOfTab = async (req, res, next) => {
           id: tab._id,
           name: tab.tabName,
         },
-      },
-      summary: {
-        totalProjects: result.pagination.totalDocs,
-        projectsWithTasks: result.projects.filter((p) => p.taskStats.total > 0)
-          .length,
-        totalTasks: result.projects.reduce(
-          (sum, p) => sum + p.taskStats.total,
-          0
-        ),
-        completedTasks: result.projects.reduce(
-          (sum, p) => sum + p.taskStats.completed,
-          0
-        ),
-        overdueTasks: result.projects.reduce(
-          (sum, p) => sum + p.taskStats.overdue,
-          0
-        ),
+        calendar: {
+          currentDate: currentDate.toISOString().split("T")[0],
+          month: month + 1, // 1-based month
+          year,
+          monthStart: monthStart.toISOString().split("T")[0],
+          monthEnd: monthEnd.toISOString().split("T")[0],
+          monthName: monthStart.toLocaleDateString("en-US", { month: "long" }),
+        },
       },
     };
 
     return generateResponse(
       responseData,
-      "Projects fetched successfully",
+      `Calendar tasks for ${monthStart.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })} fetched successfully`,
       res,
       STATUS_CODES.SUCCESS
     );
   } catch (error) {
-    console.error("Error in getProjectsOfTab:", error);
+    console.error("Error in handleCalendarView:", error);
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
-      message: error?.message ?? "Failed to fetch projects",
+      message: error?.message ?? "Failed to fetch calendar data",
     });
   }
 };
