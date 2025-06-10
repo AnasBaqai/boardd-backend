@@ -30,16 +30,42 @@ exports.getAllChannelsOfUserQuery = (userId) => {
               name: 1,
               email: 1,
               isDemo: 1,
+              createdAt: 1, // Add createdAt for recent user logic
             },
           },
           {
             $sort: {
-              isDemo: 1, // Demo users last
-              name: 1, // Then by name
+              createdAt: -1, // Sort by most recent first
+              isDemo: 1, // Then demo users
             },
           },
+          {
+            $limit: 3, // Get 3 most recent users
+          },
         ],
-        as: "memberDetails",
+        as: "recentMembers",
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        let: { channelMembers: "$members" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $in: ["$_id", "$$channelMembers"] }, // Regular channel members
+                  { $eq: ["$isDemo", true] }, // Always include demo users
+                ],
+              },
+            },
+          },
+          {
+            $count: "total", // Just count all members
+          },
+        ],
+        as: "memberCount",
       },
     },
     {
@@ -57,6 +83,17 @@ exports.getAllChannelsOfUserQuery = (userId) => {
       },
     },
     {
+      $addFields: {
+        totalMembers: {
+          $cond: {
+            if: { $gt: [{ $size: "$memberCount" }, 0] },
+            then: { $arrayElemAt: ["$memberCount.total", 0] },
+            else: 0,
+          },
+        },
+      },
+    },
+    {
       $project: {
         _id: 1,
         channelName: 1,
@@ -65,10 +102,11 @@ exports.getAllChannelsOfUserQuery = (userId) => {
         channelToken: 1,
         createdAt: 1,
         updatedAt: 1,
-        totalMembers: { $size: "$memberDetails" }, // Updated to count all members including demo
-        members: {
+        totalMembers: 1,
+        // Return up to 3 recent members
+        recentMembers: {
           $map: {
-            input: "$memberDetails",
+            input: "$recentMembers",
             as: "member",
             in: {
               _id: "$$member._id",
@@ -76,6 +114,14 @@ exports.getAllChannelsOfUserQuery = (userId) => {
               email: "$$member.email",
               isDemo: "$$member.isDemo",
             },
+          },
+        },
+        // Calculate remaining members count for "+X more" display
+        remainingMembers: {
+          $cond: {
+            if: { $gt: ["$totalMembers", { $size: "$recentMembers" }] },
+            then: { $subtract: ["$totalMembers", { $size: "$recentMembers" }] },
+            else: 0,
           },
         },
         creator: {
