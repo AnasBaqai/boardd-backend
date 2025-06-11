@@ -568,11 +568,10 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-          results.failed.push({
-            email,
-            reason: "Invalid email format",
+          return next({
+            statusCode: STATUS_CODES.BAD_REQUEST,
+            message: "email format not allowed",
           });
-          continue;
         }
 
         // Determine if this should be a guest invite
@@ -581,12 +580,11 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
 
         // Validate guest invites are allowed if needed
         if (isGuestInvite && !allowGuests) {
-          results.failed.push({
-            email,
-            reason:
+          return next({
+            statusCode: STATUS_CODES.FORBIDDEN,
+            message:
               "Guest invites not allowed. Only company domain emails permitted.",
           });
-          continue;
         }
 
         // Find appropriate slot
@@ -597,11 +595,10 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
             isGuestInviteSlot: true,
           });
           if (!availableSlot) {
-            results.failed.push({
-              email,
-              reason: "No guest invite slots available",
+            return next({
+              statusCode: STATUS_CODES.NOT_FOUND,
+              message: "no guest slot available",
             });
-            continue;
           }
         } else {
           availableSlot = await findAvailableInviteSlot({
@@ -609,11 +606,10 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
             isGuestInviteSlot: false,
           });
           if (!availableSlot) {
-            results.failed.push({
-              email,
-              reason: "No company invite slots available",
+            return next({
+              statusCode: STATUS_CODES.NOT_FOUND,
+              message: "no company slot available",
             });
-            continue;
           }
         }
 
@@ -626,11 +622,10 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
         });
 
         if (existingInvite) {
-          results.failed.push({
-            email,
-            reason: "User already has a pending invite for this channel",
+          return next({
+            statusCode: STATUS_CODES.NOT_FOUND,
+            message: "user already has existing invite on this email",
           });
-          continue;
         }
 
         // Generate invite link with flow context
@@ -708,7 +703,6 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
       return next({
         statusCode: STATUS_CODES.BAD_REQUEST,
         message: "Failed to send any channel invite emails",
-        data: response,
       });
     }
 
