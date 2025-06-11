@@ -19,7 +19,14 @@ const {
   getAllChannelsOfUserQuery,
 } = require("./queries/channelQueries");
 const { findCompany } = require("../models/companyModel");
-
+// Import required functions
+const {
+  findAvailableInviteSlot,
+  updateInviteSlot,
+  findInviteSlot,
+} = require("../models/inviteSlotModel");
+const Mailer = require("../utils/mailer");
+const { generateChannelInviteEmail } = require("../utils/emailTemplates");
 exports.createChannel = async (req, res, next) => {
   try {
     const { channelName, channelDescription, isPrivate } = parseBody(req.body);
@@ -93,16 +100,95 @@ exports.getChannelJoiningLink = async (req, res, next) => {
       });
     }
 
-    const joiningLink = `${
-      process.env.FRONTEND_URL || "http://localhost:3000"
-    }/join-channel?token=${channel.channelToken}`;
+    // Get company details
+    const company = await findCompany({ _id: channel.companyId });
+    if (!company) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
+    }
 
-    return generateResponse(
-      joiningLink,
-      "Channel joining link fetched successfully",
-      res,
-      STATUS_CODES.SUCCESS
-    );
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
+    // Try to get company slot for main joining link
+    const companySlot = await findAvailableInviteSlot({
+      companyId: company._id,
+      isGuestInviteSlot: false,
+    });
+
+    let joiningLink;
+    let guestLink = null;
+    let errors = [];
+
+    // Generate company link (backward compatible)
+    if (companySlot) {
+      joiningLink = `${baseUrl}/invite/channel/${companySlot.token}?flow=company`;
+    } else {
+      // Fallback to old channel token if no company slots available
+      joiningLink = `${baseUrl}/join-channel?token=${channel.channelToken}`;
+      errors.push("No company invite slots available - using fallback link");
+    }
+
+    // Try to get guest slot for additional functionality
+    const guestSlot = await findAvailableInviteSlot({
+      companyId: company._id,
+      isGuestInviteSlot: true,
+    });
+
+    if (guestSlot) {
+      guestLink = `${baseUrl}/invite/channel/${guestSlot.token}?flow=guest`;
+    } else {
+      errors.push("No guest invite slots available");
+    }
+
+    // Enhanced response - backward compatible with additional features
+    const response = {
+      // Keep original field name for backward compatibility
+      data: joiningLink,
+
+      // Add new guest functionality
+      guestLink: guestLink,
+
+      // Additional metadata for frontend (optional to use)
+      channelInfo: {
+        id: channel._id,
+        name: channel.channelName,
+        description: channel.channelDescription,
+      },
+
+      availability: {
+        companySlotsAvailable: !!companySlot,
+        guestSlotsAvailable: !!guestSlot,
+        errors: errors,
+      },
+    };
+
+    // Determine message based on availability
+    let message = "Channel joining link fetched successfully";
+    if (errors.length > 0) {
+      message = `Channel joining link fetched with limitations: ${errors.join(
+        ", "
+      )}`;
+    }
+
+    // Send response directly for backward compatibility (avoiding double nesting)
+    return res.status(errors.length > 0 ? 206 : 200).json({
+      success: true,
+      message: message,
+      data: joiningLink, // Backward compatible - just the link
+      guestLink: guestLink, // New feature
+      channelInfo: {
+        id: channel._id,
+        name: channel.channelName,
+        description: channel.channelDescription,
+      },
+      availability: {
+        companySlotsAvailable: !!companySlot,
+        guestSlotsAvailable: !!guestSlot,
+        errors: errors,
+      },
+    });
   } catch (error) {
     console.log(error);
     return next({
@@ -410,6 +496,236 @@ exports.getAllChannelsOfUser = async (req, res, next) => {
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message,
+    });
+  }
+};
+
+// Send channel invite emails
+exports.sendChannelInviteEmails = async (req, res, next) => {
+  try {
+    const { channelId } = req.params;
+    const {
+      emails = [],
+      allowGuests = false,
+      channelDescription = null,
+    } = parseBody(req.body);
+
+    const inviterId = req.user.id;
+
+    // Validate emails array
+    if (!emails || emails.length === 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Emails array is required and must not be empty",
+      });
+    }
+
+    // Validate user exists
+    const inviter = await findUser({ _id: inviterId });
+    if (!inviter) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
+    // Validate channel exists and user has access
+    const channel = await findChannel({ _id: channelId });
+    if (!channel) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
+    }
+
+    // Check if user is a member of the channel
+    if (!channel.members.includes(inviterId)) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "You must be a member of the channel to send invites",
+      });
+    }
+
+    // Get company details
+    const company = await findCompany({ _id: channel.companyId });
+    if (!company) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
+    }
+
+    const results = {
+      successful: [],
+      failed: [],
+    };
+
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
+    // Process each email
+    for (const email of emails) {
+      try {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          results.failed.push({
+            email,
+            reason: "Invalid email format",
+          });
+          continue;
+        }
+
+        // Determine if this should be a guest invite
+        const emailDomain = extractDomainFromEmail(email);
+        const isGuestInvite = emailDomain !== company.domain;
+
+        // Validate guest invites are allowed if needed
+        if (isGuestInvite && !allowGuests) {
+          results.failed.push({
+            email,
+            reason:
+              "Guest invites not allowed. Only company domain emails permitted.",
+          });
+          continue;
+        }
+
+        // Find appropriate slot
+        let availableSlot;
+        if (isGuestInvite) {
+          availableSlot = await findAvailableInviteSlot({
+            companyId: company._id,
+            isGuestInviteSlot: true,
+          });
+          if (!availableSlot) {
+            results.failed.push({
+              email,
+              reason: "No guest invite slots available",
+            });
+            continue;
+          }
+        } else {
+          availableSlot = await findAvailableInviteSlot({
+            companyId: company._id,
+            isGuestInviteSlot: false,
+          });
+          if (!availableSlot) {
+            results.failed.push({
+              email,
+              reason: "No company invite slots available",
+            });
+            continue;
+          }
+        }
+
+        // Check if email already has an invite for this channel
+        const existingInvite = await findInviteSlot({
+          companyId: company._id,
+          channelId: channel._id,
+          reservedFor: email,
+          used: false,
+        });
+
+        if (existingInvite) {
+          results.failed.push({
+            email,
+            reason: "User already has a pending invite for this channel",
+          });
+          continue;
+        }
+
+        // Generate invite link with flow context
+        const inviteLink = `${baseUrl}/invite/channel/${
+          availableSlot.token
+        }?flow=${isGuestInvite ? "guest" : "company"}`;
+
+        // Prepare email content
+        const subject = `Join ${channel.channelName} channel at ${company.name}`;
+        const { html, text } = generateChannelInviteEmail({
+          channelName: channel.channelName,
+          companyName: company.name,
+          inviteLink,
+          inviterName: inviter.name,
+          inviterEmail: inviter.email,
+          channelDescription,
+          isGuestInvite,
+        });
+
+        // Send email
+        await Mailer.sendEmail({
+          email,
+          subject,
+          message: text,
+          html: html,
+          replyTo: inviter.email,
+        });
+
+        // NOW reserve the slot (only after successful email send)
+        await updateInviteSlot(
+          { _id: availableSlot._id },
+          {
+            reserved: true,
+            reservedFor: email,
+            channelId: channel._id,
+            inviteType: isGuestInvite ? "channel_guest" : "channel_company",
+            reservedAt: new Date(),
+          }
+        );
+
+        results.successful.push({
+          email,
+          inviteType: isGuestInvite ? "guest" : "company",
+          inviteLink,
+        });
+      } catch (error) {
+        console.error(`Error processing invite for ${email}:`, error);
+        results.failed.push({
+          email,
+          reason: "Failed to send invite",
+        });
+      }
+    }
+
+    // Determine response
+    const totalEmails = emails.length;
+    const successfulEmails = results.successful.length;
+    const failedEmails = results.failed.length;
+
+    const response = {
+      emailInvites: results,
+      stats: {
+        totalEmailsRequested: totalEmails,
+        emailsSentSuccessfully: successfulEmails,
+        emailsFailed: failedEmails,
+        allowGuests: allowGuests,
+      },
+      channelInfo: {
+        id: channel._id,
+        name: channel.channelName,
+      },
+    };
+
+    if (successfulEmails === 0 && failedEmails > 0) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Failed to send any channel invite emails",
+        data: response,
+      });
+    }
+
+    const message =
+      successfulEmails === totalEmails
+        ? `All ${successfulEmails} channel invite emails sent successfully`
+        : `${successfulEmails} of ${totalEmails} channel invite emails sent successfully`;
+
+    const statusCode =
+      failedEmails > 0 ? STATUS_CODES.PARTIAL_CONTENT : STATUS_CODES.SUCCESS;
+
+    return generateResponse(response, message, res, statusCode);
+  } catch (error) {
+    console.error("Error in sendChannelInviteEmails:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to send channel invite emails",
     });
   }
 };

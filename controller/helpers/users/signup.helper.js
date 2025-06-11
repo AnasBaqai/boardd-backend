@@ -19,13 +19,28 @@ exports.generateJoinToken = () => {
 
 // Invite slots helper
 exports.createInviteSlots = async (companyId, createManyInviteSlots) => {
-  const slots = Array.from(
-    { length: parseInt(process.env.INVITE_SLOT_COUNT) },
-    (_, i) => ({
-      companyId,
-      slot: i + 1,
-      token: exports.generateJoinToken(),
-    })
-  );
-  return createManyInviteSlots(slots);
+  const companySlotCount = parseInt(process.env.INVITE_SLOT_COUNT) || 5;
+  const guestSlotCount = 5; // Fixed 5 guest slots per company
+
+  // Create company invite slots (existing functionality)
+  const companySlots = Array.from({ length: companySlotCount }, (_, i) => ({
+    companyId,
+    slot: i + 1,
+    token: exports.generateJoinToken(),
+    isGuestInviteSlot: false,
+    inviteType: "company",
+  }));
+
+  // Create guest invite slots (new functionality)
+  const guestSlots = Array.from({ length: guestSlotCount }, (_, i) => ({
+    companyId,
+    slot: companySlotCount + i + 1, // Continue slot numbering
+    token: exports.generateJoinToken(),
+    isGuestInviteSlot: true,
+    inviteType: "channel_guest",
+  }));
+
+  // Combine and create all slots
+  const allSlots = [...companySlots, ...guestSlots];
+  return createManyInviteSlots(allSlots);
 };

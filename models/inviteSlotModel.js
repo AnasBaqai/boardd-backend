@@ -8,6 +8,16 @@ const InviteSlotSchema = new Schema({
   reservedFor: { type: String }, // Email for whom the slot is reserved
   reservedRole: { type: String }, // Role for the reserved user
   reservedAt: { type: Date }, // When the slot was reserved
+
+  // New fields for channel invite support
+  isGuestInviteSlot: { type: Boolean, default: false }, // true for guest slots, false for company slots
+  channelId: { type: Types.ObjectId, ref: "Channel" }, // Only for channel invites
+  inviteType: {
+    type: String,
+    enum: ["company", "channel_guest", "channel_company"],
+    default: "company",
+  },
+
   createdAt: { type: Date, default: Date.now },
 });
 InviteSlotSchema.index({ companyId: 1, slot: 1 }, { unique: true });

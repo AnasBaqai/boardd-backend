@@ -7,6 +7,7 @@ const {
   getChannelJoiningLink,
   getAllMembersInChannel,
   getAllChannelsOfUser,
+  sendChannelInviteEmails,
 } = require("../controller/channelController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
@@ -16,6 +17,7 @@ const {
   validateGetChannelJoiningLinkQuery,
   validateGetAllMembersInChannelQuery,
   validateGetAllChannelsOfUserQuery,
+  validateSendChannelInviteEmails,
 } = require("../validation/channelValidation");
 
 class ChannelApi {
@@ -65,6 +67,14 @@ class ChannelApi {
       Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
       validateGetAllChannelsOfUserQuery,
       getAllChannelsOfUser
+    );
+
+    // Send channel invite emails
+    router.post(
+      "/:channelId/invite/emails",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE]),
+      validateSendChannelInviteEmails,
+      sendChannelInviteEmails
     );
   }
 

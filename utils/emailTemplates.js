@@ -1059,3 +1059,419 @@ Powered by Boardd - ${process.env.FRONTEND_URL || "https://boardd.io"}
 
   return { html, text };
 };
+
+/**
+ * Generate channel invite email template
+ * @param {Object} params Parameters for the template
+ * @param {string} params.channelName Channel name
+ * @param {string} params.companyName Company name
+ * @param {string} params.inviteLink Invitation link
+ * @param {string} params.inviterName Name of the person who sent the invite
+ * @param {string} params.inviterEmail Email of the person who sent the invite
+ * @param {string} params.channelDescription Optional channel description
+ * @param {boolean} params.isGuestInvite Whether this is a guest invite
+ * @returns {Object} Object containing HTML and text versions of the email
+ */
+exports.generateChannelInviteEmail = ({
+  channelName,
+  companyName,
+  inviteLink,
+  inviterName,
+  inviterEmail,
+  channelDescription = null,
+  isGuestInvite = false,
+}) => {
+  const baseUrl = process.env.BACKEND_URL;
+  const logoUrl = `${baseUrl}/assets/images/boardd-logo.png`;
+
+  const inviteType = isGuestInvite ? "Guest Access" : "Team Member";
+  const accessDuration = isGuestInvite ? "3 months" : "unlimited";
+  const accessScope = isGuestInvite
+    ? "this channel only"
+    : "your company workspace";
+
+  // HTML email with modern professional styling
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join ${channelName} on Boardd</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background-color: #f9fafb;
+      -webkit-text-size-adjust: none;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .email-header {
+      background: linear-gradient(135deg, #2ea043 0%, #238636 100%);
+      padding: 32px 40px;
+      text-align: center;
+    }
+    
+    .logo {
+      height: 48px;
+      width: auto;
+      margin-bottom: 16px;
+      filter: brightness(0) invert(1);
+    }
+    
+    .header-title {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .email-body {
+      padding: 40px;
+    }
+    
+    .greeting {
+      font-size: 18px;
+      color: #1f2937;
+      margin-bottom: 24px;
+      font-weight: 500;
+    }
+    
+    .invite-message {
+      font-size: 16px;
+      color: #4b5563;
+      margin-bottom: 32px;
+      line-height: 1.7;
+    }
+    
+    .channel-highlight {
+      color: #2ea043;
+      font-weight: 600;
+    }
+    
+    .company-highlight {
+      color: #238636;
+      font-weight: 600;
+    }
+    
+    .access-card {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      border-left: 4px solid #2ea043;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 24px 0;
+    }
+    
+    .access-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #166534;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .access-details {
+      font-size: 15px;
+      color: #166534;
+      margin-bottom: 8px;
+    }
+    
+    .access-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    .access-icon {
+      margin-right: 8px;
+      font-size: 16px;
+    }
+    
+    .inviter-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border-left: 4px solid #2ea043;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 24px 0;
+    }
+    
+    .inviter-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .inviter-card-title::before {
+      content: "👋";
+      margin-right: 8px;
+    }
+    
+    .inviter-details {
+      font-size: 15px;
+      color: #1f2937;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    
+    .inviter-note {
+      font-size: 13px;
+      color: #6b7280;
+      font-style: italic;
+    }
+    
+    .cta-section {
+      text-align: center;
+      margin: 32px 0;
+    }
+    
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #2ea043 0%, #238636 100%);
+      color: #ffffff;
+      text-decoration: none;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 14px 0 rgba(46, 160, 67, 0.3);
+      text-align: center;
+      min-width: 200px;
+    }
+    
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px 0 rgba(46, 160, 67, 0.4);
+    }
+    
+    .alternative-link {
+      margin-top: 24px;
+      padding: 16px;
+      background-color: #f9fafb;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .alternative-text {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .alternative-url {
+      font-size: 12px;
+      color: #4b5563;
+      word-break: break-all;
+      background-color: #ffffff;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #d1d5db;
+    }
+    
+    ${
+      isGuestInvite
+        ? `
+    .guest-notice {
+      background-color: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      border-radius: 6px;
+      margin: 24px 0;
+    }
+    
+    .guest-notice-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+    
+    .guest-notice-text {
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.5;
+    }
+    `
+        : ""
+    }
+    
+    .footer {
+      background-color: #f9fafb;
+      padding: 24px 40px;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+    }
+    
+    .footer-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .unsubscribe-link {
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 12px;
+    }
+    
+    .unsubscribe-link:hover {
+      text-decoration: underline;
+    }
+    
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 0;
+        border-radius: 0;
+      }
+      
+      .email-body, .email-header, .footer {
+        padding: 24px 20px;
+      }
+      
+      .header-title {
+        font-size: 24px;
+      }
+      
+      .cta-button {
+        padding: 14px 24px;
+        font-size: 15px;
+        min-width: auto;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="email-header">
+      <img src="${logoUrl}" alt="Boardd Logo" class="logo">
+      <h1 class="header-title">You're invited!</h1>
+    </div>
+    
+    <div class="email-body">
+      <div class="greeting">Hello there! 👋</div>
+      
+      <div class="invite-message">
+        <strong>${inviterName}</strong> has invited you to join the 
+        <span class="channel-highlight">${channelName}</span> channel 
+        ${isGuestInvite ? "as a guest " : ""}at 
+        <span class="company-highlight">${companyName}</span>.
+        ${channelDescription ? `<br><br><em>"${channelDescription}"</em>` : ""}
+      </div>
+      
+      <div class="access-card">
+        <div class="access-card-title">🎯 Your Access Details</div>
+        <div class="access-item">
+          <span class="access-icon">⏰</span>
+          <div class="access-details">Duration: <strong>${accessDuration}</strong></div>
+        </div>
+        <div class="access-item">
+          <span class="access-icon">🌍</span>
+          <div class="access-details">Access to: <strong>${accessScope}</strong></div>
+        </div>
+        <div class="access-item">
+          <span class="access-icon">👥</span>
+          <div class="access-details">Invited as: <strong>${inviteType}</strong></div>
+        </div>
+      </div>
+      
+      ${
+        isGuestInvite
+          ? `
+      <div class="guest-notice">
+        <div class="guest-notice-title">🎉 Guest Access Information</div>
+        <div class="guest-notice-text">
+          You're getting 3-month guest access to this specific channel. 
+          If you'd like full access to ${companyName}, please sign up with your company email domain.
+        </div>
+      </div>
+      `
+          : ""
+      }
+      
+      <div class="cta-section">
+        <a href="${inviteLink}" class="cta-button">
+          Join ${channelName} →
+        </a>
+        
+        <div class="alternative-link">
+          <div class="alternative-text">Can't click the button? Copy and paste this link:</div>
+          <div class="alternative-url">${inviteLink}</div>
+        </div>
+      </div>
+      
+      <div class="inviter-card">
+        <div class="inviter-card-title">Invited by</div>
+        <div class="inviter-details">${inviterName}</div>
+        <div class="inviter-note">Feel free to reach out if you have any questions!</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <div class="footer-text">
+        This invitation was sent by ${companyName} via Boardd.
+        <br>
+        © ${new Date().getFullYear()} Boardd. All rights reserved.
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  // Plain text version
+  const text = `
+Join ${channelName} on Boardd
+
+Hello! 
+
+${inviterName} has invited you to join the "${channelName}" channel ${
+    isGuestInvite ? "as a guest " : ""
+  }at ${companyName}.
+
+${channelDescription ? `About this channel: ${channelDescription}` : ""}
+
+Your Access Details:
+• Duration: ${accessDuration}
+• Access to: ${accessScope}  
+• Invited as: ${inviteType}
+
+${
+  isGuestInvite
+    ? `
+Guest Access Information:
+You're getting 3-month guest access to this specific channel. If you'd like full access to ${companyName}, please sign up with your company email domain.
+`
+    : ""
+}
+
+Click here to join: ${inviteLink}
+
+Invited by: ${inviterName} (${inviterEmail})
+
+This invitation was sent by ${companyName} via Boardd.
+© ${new Date().getFullYear()} Boardd. All rights reserved.
+`;
+
+  return { html, text };
+};

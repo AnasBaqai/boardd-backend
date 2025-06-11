@@ -207,13 +207,28 @@ const getAllChannelsOfUserQueryValidation = Joi.object({
     "boolean.base": "isPrivate must be a boolean value",
   }),
 
-  companyId: helpers.objectIdValidation.optional().messages({
-    "string.pattern.base": "Company ID must be a valid ObjectId",
+  includeArchived: Joi.boolean().optional().default(false).messages({
+    "boolean.base": "includeArchived must be a boolean value",
   }),
 
-  createdBy: helpers.objectIdValidation.optional().messages({
-    "string.pattern.base": "Created by must be a valid user ID",
+  hasMembers: Joi.boolean().optional().messages({
+    "boolean.base": "hasMembers must be a boolean value",
   }),
+
+  memberCount: Joi.object({
+    min: Joi.number().integer().min(0).optional().messages({
+      "number.min": "Minimum member count must be at least 0",
+      "number.integer": "Minimum member count must be an integer",
+    }),
+    max: Joi.number().integer().min(1).optional().messages({
+      "number.min": "Maximum member count must be at least 1",
+      "number.integer": "Maximum member count must be an integer",
+    }),
+  })
+    .optional()
+    .messages({
+      "object.base": "Member count filter must be an object",
+    }),
 
   page: Joi.number().integer().min(1).optional().default(1).messages({
     "number.min": "Page must be at least 1",
@@ -233,18 +248,18 @@ const getAllChannelsOfUserQueryValidation = Joi.object({
     }),
 
   sortBy: Joi.string()
-    .valid("channelName", "createdAt", "updatedAt", "isPrivate")
+    .valid("channelName", "createdAt", "memberCount", "isPrivate")
     .optional()
-    .default("createdAt")
+    .default("channelName")
     .messages({
       "any.only":
-        "Sort by must be one of: channelName, createdAt, updatedAt, isPrivate",
+        "Sort by must be one of: channelName, createdAt, memberCount, isPrivate",
     }),
 
   sortOrder: Joi.string()
     .valid("asc", "desc")
     .optional()
-    .default("desc")
+    .default("asc")
     .messages({
       "any.only": "Sort order must be either 'asc' or 'desc'",
     }),
@@ -330,6 +345,33 @@ const joinChannelByTokenValidation = Joi.object({
   }),
 });
 
+// Send channel invite emails validation schema
+const sendChannelInviteEmailsValidation = Joi.object({
+  emails: Joi.array()
+    .items(
+      Joi.string().email().messages({
+        "string.email": "Each email must be a valid email address",
+      })
+    )
+    .min(1)
+    .max(50)
+    .required()
+    .messages({
+      "array.base": "Emails must be an array of email addresses",
+      "array.min": "At least one email is required",
+      "array.max": "Cannot send invites to more than 50 emails at once",
+      "any.required": "Emails array is required",
+    }),
+
+  allowGuests: Joi.boolean().optional().default(false).messages({
+    "boolean.base": "allowGuests must be a boolean value",
+  }),
+
+  channelDescription: Joi.string().trim().max(500).optional().messages({
+    "string.max": "Channel description cannot exceed 500 characters",
+  }),
+});
+
 // Validation middleware function
 const validateRequest = (schema, source = "body") => {
   return (req, res, next) => {
@@ -403,6 +445,9 @@ module.exports = {
     "query"
   ),
   validateJoinChannelByToken: validateRequest(joinChannelByTokenValidation),
+  validateSendChannelInviteEmails: validateRequest(
+    sendChannelInviteEmailsValidation
+  ),
 
   // Export schemas for testing or custom usage
   schemas: {
@@ -417,5 +462,6 @@ module.exports = {
     getAllChannelsOfUserQueryValidation,
     getChannelsQueryValidation,
     joinChannelByTokenValidation,
+    sendChannelInviteEmailsValidation,
   },
 };
