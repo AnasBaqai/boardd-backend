@@ -357,3 +357,22 @@ exports.setRefreshTokenCookie = (res, refreshToken) => {
 exports.extractDomainFromEmail = (email) => {
   return email.split("@")[1];
 };
+
+// Helper function to parse date strings (for use in controllers)
+function parseDate(dateString) {
+  if (!dateString) return undefined;
+  if (dateString instanceof Date) return dateString;
+  if (
+    typeof dateString === "string" &&
+    dateString.match(/^\d{2}-\d{2}-\d{4}$/)
+  ) {
+    const [day, month, year] = dateString.split("-");
+    return new Date(year, month - 1, day);
+  }
+  return new Date(dateString);
+}
+
+module.exports = {
+  // ... existing exports ...
+  parseDate,
+};

@@ -22,6 +22,7 @@ const { getTaskByIdQuery } = require("./queries/tasksQueries");
 const { getAllTasks } = require("../models/taskModel");
 const Mailer = require("../utils/mailer");
 const { generateTaskShareEmail } = require("../utils/emailTemplates");
+const { parseDate } = require("../utils");
 
 /**
  * Create a new task
@@ -73,7 +74,7 @@ exports.createTask = async (req, res, next) => {
       projectId,
       assignedTo: assignedTo || [],
       priority: priority,
-      dueDate: dueDate || null,
+      dueDate: parseDate(dueDate) || null,
       createdBy: userId,
     });
 
