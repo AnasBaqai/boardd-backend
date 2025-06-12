@@ -546,10 +546,11 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-          return next({
-            statusCode: STATUS_CODES.BAD_REQUEST,
-            message: "email format not allowed",
+          results.failed.push({
+            email,
+            reason: "Invalid email format",
           });
+          continue; // Continue processing other emails
         }
 
         // Determine if this should be a guest invite
@@ -558,79 +559,96 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
 
         // Validate guest invites are allowed if needed
         if (isGuestInvite && !allowGuests) {
-          return next({
-            statusCode: STATUS_CODES.FORBIDDEN,
-            message:
+          results.failed.push({
+            email,
+            reason:
               "Guest invites not allowed. Only company domain emails permitted.",
           });
+          continue; // Continue processing other emails
         }
 
-        // CRITICAL: Check if user already exists and is a company member
+        // Check if user exists and determine flow
         const existingUser = await findUser({ email });
-        if (
-          existingUser &&
-          existingUser.companyId &&
-          existingUser.companyId.toString() === company._id.toString()
-        ) {
-          return next({
-            statusCode: STATUS_CODES.CONFLICT,
-            message: "User is already a member of this company",
-          });
-        }
+        let isExistingCompanyMember = false;
 
-        // CRITICAL: Check if user is already a channel member
-        if (existingUser && channel.members.includes(existingUser._id)) {
-          return next({
-            statusCode: STATUS_CODES.CONFLICT,
-            message: "User is already a member of this channel",
-          });
-        }
-
-        // Find appropriate slot
-        let availableSlot;
-        if (isGuestInvite) {
-          availableSlot = await findAvailableInviteSlot({
-            companyId: company._id,
-            isGuestInviteSlot: true,
-          });
-          if (!availableSlot) {
-            return next({
-              statusCode: STATUS_CODES.NOT_FOUND,
-              message: "no guest slot available",
+        if (existingUser) {
+          // Check if user is already a channel member
+          if (channel.members.includes(existingUser._id)) {
+            results.failed.push({
+              email,
+              reason: "User is already a member of this channel",
             });
+            continue; // Continue processing other emails
           }
+
+          // Check if user is a company member
+          if (
+            existingUser.companyId &&
+            existingUser.companyId.toString() === company._id.toString()
+          ) {
+            isExistingCompanyMember = true;
+          }
+        }
+
+        // For existing company members, no slot reservation needed
+        let availableSlot = null;
+        let shouldReserveSlot = !isExistingCompanyMember;
+
+        if (shouldReserveSlot) {
+          // Check if email already has ANY pending invite (not just this channel)
+          const existingAnyInvite = await findInviteSlot({
+            companyId: company._id,
+            reservedFor: email,
+            used: false,
+          });
+
+          if (existingAnyInvite) {
+            results.failed.push({
+              email,
+              reason: "User already has an existing invite pending",
+            });
+            continue; // Continue processing other emails
+          }
+
+          // Find appropriate slot for non-company members
+          if (isGuestInvite) {
+            availableSlot = await findAvailableInviteSlot({
+              companyId: company._id,
+              isGuestInviteSlot: true,
+            });
+            if (!availableSlot) {
+              results.failed.push({
+                email,
+                reason: "No guest invite slots available",
+              });
+              continue; // Continue processing other emails
+            }
+          } else {
+            availableSlot = await findAvailableInviteSlot({
+              companyId: company._id,
+              isGuestInviteSlot: false,
+            });
+            if (!availableSlot) {
+              results.failed.push({
+                email,
+                reason: "No company invite slots available",
+              });
+              continue; // Continue processing other emails
+            }
+          }
+        }
+
+        // Generate invite link
+        let inviteLink;
+        if (shouldReserveSlot && availableSlot) {
+          // Use slot token for non-company members
+          inviteLink = `${baseUrl}/invite/channel/${availableSlot.token}?flow=${
+            isGuestInvite ? "guest" : "company"
+          }&channelId=${channel._id}`;
         } else {
-          availableSlot = await findAvailableInviteSlot({
-            companyId: company._id,
-            isGuestInviteSlot: false,
-          });
-          if (!availableSlot) {
-            return next({
-              statusCode: STATUS_CODES.NOT_FOUND,
-              message: "no company slot available",
-            });
-          }
+          // Use channel token for existing company members
+          inviteLink = `${baseUrl}/join-channel?token=${channel.channelToken}&channelId=${channel._id}`;
         }
-
-        // Check if email already has an invite for this channel
-        const existingInvite = await findInviteSlot({
-          companyId: company._id,
-          channelId: channel._id,
-          reservedFor: email,
-          used: false,
-        });
-
-        if (existingInvite) {
-          return next({
-            statusCode: STATUS_CODES.NOT_FOUND,
-            message: "user already has existing invite on this email",
-          });
-        }
-
-        // Generate invite link with flow context
-        const inviteLink = `${baseUrl}/invite/channel/${
-          availableSlot.token
-        }?flow=${isGuestInvite ? "guest" : "company"}&channelId=${channel._id}`;
 
         // Prepare email content
         const subject = `Join ${channel.channelName} channel at ${company.name}`;
@@ -653,22 +671,29 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
           replyTo: inviter.email,
         });
 
-        // NOW reserve the slot (only after successful email send)
-        await updateInviteSlot(
-          { _id: availableSlot._id },
-          {
-            reserved: true,
-            reservedFor: email,
-            channelId: channel._id,
-            inviteType: isGuestInvite ? "channel_guest" : "channel_company",
-            reservedAt: new Date(),
-          }
-        );
+        // Reserve slot only for non-company members (only after successful email send)
+        if (shouldReserveSlot && availableSlot) {
+          await updateInviteSlot(
+            { _id: availableSlot._id },
+            {
+              reserved: true,
+              reservedFor: email,
+              channelId: channel._id,
+              inviteType: isGuestInvite ? "channel_guest" : "channel_company",
+              reservedAt: new Date(),
+            }
+          );
+        }
 
         results.successful.push({
           email,
-          inviteType: isGuestInvite ? "guest" : "company",
+          inviteType: isExistingCompanyMember
+            ? "existing_member"
+            : isGuestInvite
+            ? "guest"
+            : "company",
           inviteLink,
+          slotReserved: shouldReserveSlot,
         });
       } catch (error) {
         console.error(`Error processing invite for ${email}:`, error);
@@ -699,10 +724,15 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
     };
 
     if (successfulEmails === 0 && failedEmails > 0) {
-      return next({
-        statusCode: STATUS_CODES.BAD_REQUEST,
-        message: "Failed to send any channel invite emails",
-      });
+      // Return detailed error information instead of generic message
+      return generateResponse(
+        response,
+        `Failed to send any channel invite emails. ${failedEmails} email${
+          failedEmails > 1 ? "s" : ""
+        } failed.`,
+        res,
+        STATUS_CODES.BAD_REQUEST
+      );
     }
 
     const message =

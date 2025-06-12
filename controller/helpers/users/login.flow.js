@@ -182,7 +182,27 @@ exports.handleDomainFlow = async (strategyData, userData, req, res, next) => {
     });
   }
 
-  return await handleDomainSignup(
+  // Check if user will be active (automatic signup enabled)
+  const willBeActive = company.automaticSignup === true;
+  let availableSlot = null;
+
+  // Only consume slot if user will be active
+  if (willBeActive) {
+    availableSlot = await findAvailableInviteSlot({
+      companyId: company._id,
+      isGuestInviteSlot: false, // Only company slots for domain signup
+    });
+
+    if (!availableSlot) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "No available company invite slots for domain signup",
+      });
+    }
+  }
+
+  // Handle domain signup
+  const result = await handleDomainSignup(
     name,
     email,
     password,
@@ -191,4 +211,23 @@ exports.handleDomainFlow = async (strategyData, userData, req, res, next) => {
     res,
     next
   );
+
+  // Only mark slot as used if user is active and slot was reserved
+  if (
+    result?.statusCode === STATUS_CODES.SUCCESS &&
+    willBeActive &&
+    availableSlot
+  ) {
+    await updateInviteSlot(
+      { _id: availableSlot._id },
+      {
+        used: true,
+        usedBy: result.data?.user?._id, // Get user ID from response
+        usedAt: new Date(),
+        inviteType: "company",
+      }
+    );
+  }
+
+  return result;
 };

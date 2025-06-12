@@ -212,12 +212,12 @@ exports.handleDomainSignup = async (
       role: ROLES.EMPLOYEE, // Default role for domain signups
     };
 
-    return await createUserAndResponse(
-      userData,
-      req,
-      res,
-      "User account created successfully. Waiting for admin approval."
-    );
+    // Determine appropriate success message
+    const successMessage = company.automaticSignup
+      ? "User account created and activated successfully."
+      : "User account created successfully. Waiting for admin approval.";
+
+    return await createUserAndResponse(userData, req, res, successMessage);
   } catch (error) {
     console.error("Error in handleDomainSignup:", error);
     return next({
