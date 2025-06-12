@@ -48,9 +48,20 @@ const parseDate = (dateString) => {
  */
 exports.createTask = async (req, res, next) => {
   try {
-    const { title, projectId, assignedTo, priority, dueDate } = parseBody(
-      req.body
-    );
+    const {
+      title,
+      description,
+      projectId,
+      assignedTo,
+      status,
+      priority,
+      dueDate,
+      tags,
+      strokeColor,
+      type,
+      attachments,
+      customFields,
+    } = parseBody(req.body);
 
     // Check if project exists and get context
     const project = await findProject({ _id: projectId });
@@ -87,13 +98,20 @@ exports.createTask = async (req, res, next) => {
       });
     }
 
-    // Create task
+    // Create task with all fields, using defaults for missing ones
     const task = await createTask({
-      title,
+      title: title || "",
+      description: description || "",
       projectId,
       assignedTo: assignedTo || [],
-      priority: priority,
+      status: status || "todo",
+      priority: priority || "medium",
       dueDate: parseDate(dueDate) || null,
+      tags: tags || [],
+      strokeColor: strokeColor || "#6C63FF",
+      type: type || "task",
+      attachments: attachments || [],
+      customFields: customFields || [],
       createdBy: userId,
     });
 
