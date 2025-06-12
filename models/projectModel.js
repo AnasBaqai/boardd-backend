@@ -7,7 +7,7 @@ const { getMongooseAggregatePaginatedData } = require("../utils");
 
 const projectSchema = new Schema({
   name: { type: String, required: true },
-  description: { type: String, required: true },
+  description: { type: String },
   createdBy: { type: Types.ObjectId, ref: "User", required: true },
   companyId: { type: Types.ObjectId, ref: "Company", required: true },
   channelId: { type: Types.ObjectId, ref: "Channel", required: true },
