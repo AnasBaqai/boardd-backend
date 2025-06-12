@@ -2,18 +2,33 @@ const { findChannel } = require("../models/channelModel");
 const { findChannelTab } = require("../models/channelTabsModel");
 const { createProject, getAllProjects } = require("../models/projectModel");
 const { findUser } = require("../models/userModel");
-const {
-  parseBody,
-  generateResponse,
-  formatDate,
-  parseDate,
-} = require("../utils");
+const { parseBody, generateResponse, formatDate } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
 const {
   getProjectsOfTabQuery,
   getProjectsOverviewQuery,
   getTasksCalendarQuery,
 } = require("./queries/projectQueries");
+
+// Helper function to parse date strings
+const parseDate = (dateString) => {
+  if (!dateString) return undefined;
+
+  // If it's already a Date object, return it
+  if (dateString instanceof Date) return dateString;
+
+  // Handle DD-MM-YYYY format
+  if (
+    typeof dateString === "string" &&
+    dateString.match(/^\d{2}-\d{2}-\d{4}$/)
+  ) {
+    const [day, month, year] = dateString.split("-");
+    return new Date(year, month - 1, day); // month is 0-indexed
+  }
+
+  // Handle other formats (YYYY-MM-DD, ISO, etc.)
+  return new Date(dateString);
+};
 
 exports.CreateProject = async (req, res, next) => {
   try {

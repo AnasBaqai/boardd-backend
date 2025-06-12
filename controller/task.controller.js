@@ -22,7 +22,26 @@ const { getTaskByIdQuery } = require("./queries/tasksQueries");
 const { getAllTasks } = require("../models/taskModel");
 const Mailer = require("../utils/mailer");
 const { generateTaskShareEmail } = require("../utils/emailTemplates");
-const { parseDate } = require("../utils");
+
+// Helper function to parse date strings
+const parseDate = (dateString) => {
+  if (!dateString) return undefined;
+
+  // If it's already a Date object, return it
+  if (dateString instanceof Date) return dateString;
+
+  // Handle DD-MM-YYYY format
+  if (
+    typeof dateString === "string" &&
+    dateString.match(/^\d{2}-\d{2}-\d{4}$/)
+  ) {
+    const [day, month, year] = dateString.split("-");
+    return new Date(year, month - 1, day); // month is 0-indexed
+  }
+
+  // Handle other formats (YYYY-MM-DD, ISO, etc.)
+  return new Date(dateString);
+};
 
 /**
  * Create a new task
