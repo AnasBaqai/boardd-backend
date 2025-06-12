@@ -372,6 +372,24 @@ const sendChannelInviteEmailsValidation = Joi.object({
   }),
 });
 
+// Join channel with invite token validation schema
+const joinChannelWithInviteValidation = Joi.object({
+  token: Joi.string().trim().min(10).required().messages({
+    "string.empty": "Invite token is required",
+    "string.min": "Invite token must be at least 10 characters long",
+    "any.required": "Invite token is required",
+  }),
+
+  flow: Joi.string().valid("guest", "company").required().messages({
+    "any.only": "Flow must be either 'guest' or 'company'",
+    "any.required": "Flow is required",
+  }),
+
+  channelId: helpers.objectIdValidation.required().messages({
+    "any.required": "Channel ID is required",
+  }),
+});
+
 // Validation middleware function
 const validateRequest = (schema, source = "body") => {
   return (req, res, next) => {
@@ -448,6 +466,9 @@ module.exports = {
   validateSendChannelInviteEmails: validateRequest(
     sendChannelInviteEmailsValidation
   ),
+  validateJoinChannelWithInvite: validateRequest(
+    joinChannelWithInviteValidation
+  ),
 
   // Export schemas for testing or custom usage
   schemas: {
@@ -463,5 +484,6 @@ module.exports = {
     getChannelsQueryValidation,
     joinChannelByTokenValidation,
     sendChannelInviteEmailsValidation,
+    joinChannelWithInviteValidation,
   },
 };

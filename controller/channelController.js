@@ -123,7 +123,7 @@ exports.getChannelJoiningLink = async (req, res, next) => {
 
     // Generate company link (backward compatible)
     if (companySlot) {
-      joiningLink = `${baseUrl}/invite/channel/${companySlot.token}?flow=company`;
+      joiningLink = `${baseUrl}/invite/channel/${companySlot.token}?flow=company&channelId=${channel._id}`;
     } else {
       // Fallback to old channel token if no company slots available
       joiningLink = `${baseUrl}/join-channel?token=${channel.channelToken}`;
@@ -137,32 +137,10 @@ exports.getChannelJoiningLink = async (req, res, next) => {
     });
 
     if (guestSlot) {
-      guestLink = `${baseUrl}/invite/channel/${guestSlot.token}?flow=guest`;
+      guestLink = `${baseUrl}/invite/channel/${guestSlot.token}?flow=guest&channelId=${channel._id}`;
     } else {
       errors.push("No guest invite slots available");
     }
-
-    // Enhanced response - backward compatible with additional features
-    const response = {
-      // Keep original field name for backward compatibility
-      data: joiningLink,
-
-      // Add new guest functionality
-      guestLink: guestLink,
-
-      // Additional metadata for frontend (optional to use)
-      channelInfo: {
-        id: channel._id,
-        name: channel.channelName,
-        description: channel.channelDescription,
-      },
-
-      availability: {
-        companySlotsAvailable: !!companySlot,
-        guestSlotsAvailable: !!guestSlot,
-        errors: errors,
-      },
-    };
 
     // Determine message based on availability
     let message = "Channel joining link fetched successfully";
@@ -587,6 +565,27 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
           });
         }
 
+        // CRITICAL: Check if user already exists and is a company member
+        const existingUser = await findUser({ email });
+        if (
+          existingUser &&
+          existingUser.companyId &&
+          existingUser.companyId.toString() === company._id.toString()
+        ) {
+          return next({
+            statusCode: STATUS_CODES.CONFLICT,
+            message: "User is already a member of this company",
+          });
+        }
+
+        // CRITICAL: Check if user is already a channel member
+        if (existingUser && channel.members.includes(existingUser._id)) {
+          return next({
+            statusCode: STATUS_CODES.CONFLICT,
+            message: "User is already a member of this channel",
+          });
+        }
+
         // Find appropriate slot
         let availableSlot;
         if (isGuestInvite) {
@@ -631,7 +630,7 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
         // Generate invite link with flow context
         const inviteLink = `${baseUrl}/invite/channel/${
           availableSlot.token
-        }?flow=${isGuestInvite ? "guest" : "company"}`;
+        }?flow=${isGuestInvite ? "guest" : "company"}&channelId=${channel._id}`;
 
         // Prepare email content
         const subject = `Join ${channel.channelName} channel at ${company.name}`;
@@ -720,6 +719,174 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message ?? "Failed to send channel invite emails",
+    });
+  }
+};
+
+// Join channel using invite token
+exports.joinChannelWithInvite = async (req, res, next) => {
+  try {
+    const { token, flow, channelId } = parseBody(req.body);
+    const currentUserId = req.user.id;
+
+    // Input validation
+    if (!token) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Invite token is required",
+      });
+    }
+
+    if (!flow || !["guest", "company"].includes(flow)) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Flow must be either 'guest' or 'company'",
+      });
+    }
+
+    if (!channelId) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Channel ID is required",
+      });
+    }
+
+    // Get current user
+    const currentUser = await findUser({ _id: currentUserId });
+    if (!currentUser) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
+    // Get channel details first
+    const channel = await findChannel({ _id: channelId });
+    if (!channel) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
+    }
+
+    // Find invite slot by token
+    const inviteSlot = await findInviteSlot({ token, used: false });
+    if (!inviteSlot) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Invalid or already used invite token",
+      });
+    }
+
+    // Validate flow matches slot type
+    const isGuestFlow = flow === "guest";
+    if (isGuestFlow !== inviteSlot.isGuestInviteSlot) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: `This invite token is for ${
+          inviteSlot.isGuestInviteSlot ? "guest" : "company"
+        } users only`,
+      });
+    }
+
+    // Validate that the invite slot belongs to the same company as the channel
+    if (inviteSlot.companyId.toString() !== channel.companyId.toString()) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "Invalid invite token for this channel",
+      });
+    }
+
+    // Get company details
+    const company = await findCompany({ _id: channel.companyId });
+    if (!company) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Company not found",
+      });
+    }
+
+    // Validate user eligibility based on flow
+    const userDomain = extractDomainFromEmail(currentUser.email);
+    if (flow === "company") {
+      // Company flow: user must be from same domain
+      if (userDomain !== company.domain) {
+        return next({
+          statusCode: STATUS_CODES.FORBIDDEN,
+          message: `Company invites are only for ${company.domain} domain users`,
+        });
+      }
+    }
+    // Guest flow: any domain allowed
+
+    // Check if user is already a member
+    if (channel.members.includes(currentUserId)) {
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "You are already a member of this channel",
+      });
+    }
+
+    // Check if user account is active
+    if (!currentUser.isActive) {
+      return next({
+        statusCode: STATUS_CODES.FORBIDDEN,
+        message: "Your account is inactive. Please contact support.",
+      });
+    }
+
+    // Add user to channel
+    const updatedChannel = await addMemberToChannel(
+      { _id: channel._id },
+      { $push: { members: currentUserId } }
+    );
+
+    if (!updatedChannel) {
+      return next({
+        statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+        message: "Failed to add user to channel",
+      });
+    }
+
+    // Mark invite slot as used and set the channelId
+    await updateInviteSlot(
+      { _id: inviteSlot._id },
+      {
+        used: true,
+        usedBy: currentUserId,
+        usedAt: new Date(),
+        channelId: channel._id, // Set channelId when actually used
+      }
+    );
+
+    // Prepare response data
+    const responseData = {
+      channel: {
+        id: channel._id,
+        name: channel.channelName,
+        description: channel.channelDescription,
+      },
+      userRole: flow === "guest" ? "guest" : "member",
+      joinedAt: new Date(),
+      inviteType: flow,
+    };
+
+    // Add guest-specific info if applicable
+    if (flow === "guest") {
+      responseData.accessInfo = {
+        type: "guest_access",
+        note: "Guest access to channel",
+      };
+    }
+
+    const message = `Successfully joined ${channel.channelName} channel as ${flow} user`;
+
+    return generateResponse(responseData, message, res, STATUS_CODES.SUCCESS);
+  } catch (error) {
+    console.error("Error in joinChannelWithInvite:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to join channel",
     });
   }
 };

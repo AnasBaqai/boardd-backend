@@ -17,20 +17,36 @@ const createProjectValidation = Joi.object({
     "any.required": "Tab ID is required",
   }),
 
-  startDate: Joi.date().optional().messages({
-    "date.base": "Start date must be a valid date",
-  }),
-
-  endDate: Joi.date()
+  startDate: Joi.alternatives()
+    .try(
+      Joi.date(),
+      Joi.string()
+        .pattern(/^\d{2}-\d{2}-\d{4}$/)
+        .message("Date must be in DD-MM-YYYY format"),
+      Joi.string()
+        .pattern(/^\d{4}-\d{2}-\d{2}$/)
+        .message("Date must be in YYYY-MM-DD format")
+    )
     .optional()
-    .when("startDate", {
-      is: Joi.exist(),
-      then: Joi.date().min(Joi.ref("startDate")),
-      otherwise: Joi.optional(),
-    })
     .messages({
-      "date.base": "End date must be a valid date",
-      "date.min": "End date must be after start date",
+      "alternatives.match":
+        "Start date must be a valid date (DD-MM-YYYY, YYYY-MM-DD, or Date object)",
+    }),
+
+  endDate: Joi.alternatives()
+    .try(
+      Joi.date(),
+      Joi.string()
+        .pattern(/^\d{2}-\d{2}-\d{4}$/)
+        .message("Date must be in DD-MM-YYYY format"),
+      Joi.string()
+        .pattern(/^\d{4}-\d{2}-\d{2}$/)
+        .message("Date must be in YYYY-MM-DD format")
+    )
+    .optional()
+    .messages({
+      "alternatives.match":
+        "End date must be a valid date (DD-MM-YYYY, YYYY-MM-DD, or Date object)",
     }),
 
   color: Joi.string()
@@ -107,20 +123,36 @@ const updateProjectValidation = Joi.object({
     "string.max": "Project description cannot exceed 1000 characters",
   }),
 
-  startDate: Joi.date().optional().messages({
-    "date.base": "Start date must be a valid date",
-  }),
-
-  endDate: Joi.date()
+  startDate: Joi.alternatives()
+    .try(
+      Joi.date(),
+      Joi.string()
+        .pattern(/^\d{2}-\d{2}-\d{4}$/)
+        .message("Date must be in DD-MM-YYYY format"),
+      Joi.string()
+        .pattern(/^\d{4}-\d{2}-\d{2}$/)
+        .message("Date must be in YYYY-MM-DD format")
+    )
     .optional()
-    .when("startDate", {
-      is: Joi.exist(),
-      then: Joi.date().min(Joi.ref("startDate")),
-      otherwise: Joi.optional(),
-    })
     .messages({
-      "date.base": "End date must be a valid date",
-      "date.min": "End date must be after start date",
+      "alternatives.match":
+        "Start date must be a valid date (DD-MM-YYYY, YYYY-MM-DD, or Date object)",
+    }),
+
+  endDate: Joi.alternatives()
+    .try(
+      Joi.date(),
+      Joi.string()
+        .pattern(/^\d{2}-\d{2}-\d{4}$/)
+        .message("Date must be in DD-MM-YYYY format"),
+      Joi.string()
+        .pattern(/^\d{4}-\d{2}-\d{2}$/)
+        .message("Date must be in YYYY-MM-DD format")
+    )
+    .optional()
+    .messages({
+      "alternatives.match":
+        "End date must be a valid date (DD-MM-YYYY, YYYY-MM-DD, or Date object)",
     }),
 
   color: Joi.string()
@@ -263,7 +295,8 @@ const getProjectsQueryValidation = Joi.object({
   }),
 
   startDate: Joi.date().optional().messages({
-    "date.base": "Start date must be a valid date",
+    "date.base":
+      "Start date must be a valid date (YYYY-MM-DD, DD-MM-YYYY, or ISO format)",
   }),
 
   endDate: Joi.date()
@@ -274,7 +307,8 @@ const getProjectsQueryValidation = Joi.object({
       otherwise: Joi.optional(),
     })
     .messages({
-      "date.base": "End date must be a valid date",
+      "date.base":
+        "End date must be a valid date (YYYY-MM-DD, DD-MM-YYYY, or ISO format)",
       "date.min": "End date must be after start date",
     }),
 

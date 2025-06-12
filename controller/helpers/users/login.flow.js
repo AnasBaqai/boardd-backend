@@ -105,14 +105,15 @@ exports.handlePublicFlow = async (strategyData, userData, req, res, next) => {
     });
   }
 
-  // Find an available invite slot
+  // Find an available invite slot (COMPANY SLOTS ONLY)
   const availableSlot = await findAvailableInviteSlot({
     companyId: company._id,
+    isGuestInviteSlot: false, // Only company slots for public signup
   });
   if (!availableSlot) {
     return next({
       statusCode: STATUS_CODES.NOT_FOUND,
-      message: "No available invite slot found",
+      message: "No available company invite slots found",
     });
   }
 
@@ -160,6 +161,15 @@ exports.handleRegularFlow = async (strategyData, userData, req, res, next) => {
 exports.handleDomainFlow = async (strategyData, userData, req, res, next) => {
   const { email } = strategyData;
   const { name, password } = userData;
+
+  // Additional safety check for existing user (should be caught by determineLoginStrategy)
+  const existingUser = await findUser({ email });
+  if (existingUser) {
+    return next({
+      statusCode: STATUS_CODES.CONFLICT,
+      message: "User already exists",
+    });
+  }
 
   // Handle domain-based signup
   const domain = extractDomainFromEmail(email);

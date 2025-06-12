@@ -43,9 +43,10 @@ exports.getUnusedInviteSlot = async (req, res, next) => {
       });
     }
 
-    // Find unused and unreserved invite slot for the company
+    // Find unused and unreserved invite slot for the company (COMPANY SLOTS ONLY)
     const unusedInviteSlot = await findAvailableInviteSlot({
       companyId: company._id,
+      isGuestInviteSlot: false, // Only company slots for admin invites
     });
 
     if (!unusedInviteSlot) {
@@ -135,14 +136,15 @@ exports.sendBulkInvites = async (req, res, next) => {
       });
     }
 
-    // Check if enough slots are available
+    // Check if enough slots are available (COMPANY SLOTS ONLY)
     const availableSlots = await findAvailableInviteSlot({
       companyId: company._id,
+      isGuestInviteSlot: false, // Only company slots for bulk invites
     });
     if (!availableSlots) {
       return next({
         statusCode: STATUS_CODES.FORBIDDEN,
-        message: "No available invite slots. Please upgrade your plan.",
+        message: "No available company invite slots. Please upgrade your plan.",
       });
     }
 
@@ -154,6 +156,20 @@ exports.sendBulkInvites = async (req, res, next) => {
 
     for (const [email, role] of Object.entries(invites)) {
       try {
+        // Check if user already exists in the company
+        const existingUser = await findUser({ email });
+        if (
+          existingUser &&
+          existingUser.companyId &&
+          existingUser.companyId.toString() === company._id.toString()
+        ) {
+          results.failed.push({
+            email,
+            reason: "User is already a member of this company",
+          });
+          continue;
+        }
+
         // Check if email already has a reserved slot
         const alreadyInvited = await checkEmailAlreadyInvited(
           email,
@@ -167,9 +183,10 @@ exports.sendBulkInvites = async (req, res, next) => {
           continue;
         }
 
-        // Find an available slot
+        // Find an available slot (COMPANY SLOTS ONLY)
         const availableSlot = await findAvailableInviteSlot({
           companyId: company._id,
+          isGuestInviteSlot: false, // Only company slots for bulk invites
         });
         if (!availableSlot) {
           results.failed.push({

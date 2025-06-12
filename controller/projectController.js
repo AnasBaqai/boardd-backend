@@ -10,6 +10,26 @@ const {
   getTasksCalendarQuery,
 } = require("./queries/projectQueries");
 
+// Helper function to parse date strings
+const parseDate = (dateString) => {
+  if (!dateString) return undefined;
+
+  // If it's already a Date object, return it
+  if (dateString instanceof Date) return dateString;
+
+  // Handle DD-MM-YYYY format
+  if (
+    typeof dateString === "string" &&
+    dateString.match(/^\d{2}-\d{2}-\d{4}$/)
+  ) {
+    const [day, month, year] = dateString.split("-");
+    return new Date(year, month - 1, day); // month is 0-indexed
+  }
+
+  // Handle other formats (YYYY-MM-DD, ISO, etc.)
+  return new Date(dateString);
+};
+
 exports.CreateProject = async (req, res, next) => {
   try {
     const { name, description, tabId, startDate, endDate, color, priority } =
@@ -35,8 +55,8 @@ exports.CreateProject = async (req, res, next) => {
       companyId,
       channelId,
       tabId,
-      startDate: formatDate(startDate),
-      endDate: formatDate(endDate),
+      startDate: parseDate(startDate),
+      endDate: parseDate(endDate),
       color,
       priority,
     });
