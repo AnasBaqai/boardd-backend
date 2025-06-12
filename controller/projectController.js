@@ -100,6 +100,11 @@ exports.getProjectsOfTab = async (req, res, next) => {
       });
     }
 
+    // Fetch company details for context
+    const company = await require("../models/companyModel").findCompany({
+      _id: channel.companyId,
+    });
+
     // Check if user is a member of the channel
     if (!channel.members.includes(userId)) {
       return next({
@@ -181,6 +186,10 @@ exports.getProjectsOfTab = async (req, res, next) => {
             id: tab._id,
             name: tab.tabName,
           },
+          company: {
+            id: channel.companyId,
+            name: company?.name || "Unknown Company",
+          },
         },
         summary: {
           totalProjects: result.pagination.totalDocs,
@@ -210,6 +219,10 @@ exports.getProjectsOfTab = async (req, res, next) => {
           tab: {
             id: tab._id,
             name: tab.tabName,
+          },
+          company: {
+            id: channel.companyId,
+            name: company?.name || "Unknown Company",
           },
         },
         summary: {
@@ -280,6 +293,11 @@ const handleCalendarView = async (req, res, next, params) => {
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0);
 
+    // Fetch company details for context
+    const company = await require("../models/companyModel").findCompany({
+      _id: channel.companyId,
+    });
+
     // Prepare lightweight calendar response
     const responseData = {
       tasks: result.tasks,
@@ -293,6 +311,10 @@ const handleCalendarView = async (req, res, next, params) => {
         tab: {
           id: tab._id,
           name: tab.tabName,
+        },
+        company: {
+          id: channel.companyId,
+          name: company?.name || "Unknown Company",
         },
         calendar: {
           currentDate: currentDate.toISOString().split("T")[0],
