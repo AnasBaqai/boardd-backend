@@ -31,6 +31,24 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
+    // Lookup company details for context path
+    {
+      $lookup: {
+        from: "companies",
+        localField: "companyId",
+        foreignField: "_id",
+        as: "company",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+            },
+          },
+        ],
+      },
+    },
+
     // Lookup tasks for these projects
     {
       $lookup: {
@@ -83,6 +101,14 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
+    // Unwind company array
+    {
+      $unwind: {
+        path: "$company",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
     // Unwind tasks to work with individual tasks
     {
       $unwind: {
@@ -91,7 +117,7 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
-    // Project the final lightweight task structure
+    // Project the final lightweight task structure with context path
     {
       $project: {
         _id: "$tasks._id",
@@ -101,6 +127,16 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
         dueDate: "$tasks.dueDate",
         strokeColor: "$tasks.strokeColor",
         isOverdue: "$tasks.isOverdue",
+        // Context path for tasks: company/project/task
+        contextPath: {
+          $concat: [
+            { $ifNull: ["$company.name", "Unknown Company"] },
+            "/",
+            "$name",
+            "/",
+            "$tasks.title",
+          ],
+        },
         // Minimal project context
         project: {
           _id: "$_id",
@@ -134,6 +170,24 @@ exports.getProjectsOverviewQuery = (channelId, tabId) => {
         channelId: Types.ObjectId.createFromHexString(channelId),
         tabId: Types.ObjectId.createFromHexString(tabId),
         status: "active", // Only active projects
+      },
+    },
+
+    // Lookup company details for context path
+    {
+      $lookup: {
+        from: "companies",
+        localField: "companyId",
+        foreignField: "_id",
+        as: "company",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+            },
+          },
+        ],
       },
     },
 
@@ -229,6 +283,14 @@ exports.getProjectsOverviewQuery = (channelId, tabId) => {
       },
     },
 
+    // Unwind company array
+    {
+      $unwind: {
+        path: "$company",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
     // Project minimal fields for overview
     {
       $project: {
@@ -244,6 +306,14 @@ exports.getProjectsOverviewQuery = (channelId, tabId) => {
           $round: ["$progress", 1], // Round to 1 decimal place
         },
         taskCount: "$taskStats.total",
+        // Context path for projects: company/project
+        contextPath: {
+          $concat: [
+            { $ifNull: ["$company.name", "Unknown Company"] },
+            "/",
+            "$name",
+          ],
+        },
         // Project status indicators
         isOverdue: {
           $cond: {
@@ -316,6 +386,24 @@ exports.getProjectsOfTabQuery = (channelId, tabId) => {
               _id: 1,
               name: 1,
               email: 1,
+            },
+          },
+        ],
+      },
+    },
+
+    // Lookup company details for context path
+    {
+      $lookup: {
+        from: "companies",
+        localField: "companyId",
+        foreignField: "_id",
+        as: "company",
+        pipeline: [
+          {
+            $project: {
+              _id: 1,
+              name: 1,
             },
           },
         ],
@@ -461,25 +549,103 @@ exports.getProjectsOfTabQuery = (channelId, tabId) => {
       },
     },
 
-    // Group tasks by status
+    // Group tasks by status and add context paths
     {
       $addFields: {
         todoTasks: {
-          $filter: {
-            input: "$allTasks",
-            cond: { $eq: ["$$this.status", "todo"] },
+          $map: {
+            input: {
+              $filter: {
+                input: "$allTasks",
+                cond: { $eq: ["$$this.status", "todo"] },
+              },
+            },
+            as: "task",
+            in: {
+              $mergeObjects: [
+                "$$task",
+                {
+                  contextPath: {
+                    $concat: [
+                      {
+                        $ifNull: [
+                          { $arrayElemAt: ["$company.name", 0] },
+                          "Unknown Company",
+                        ],
+                      },
+                      "/",
+                      "$name",
+                      "/",
+                      "$$task.title",
+                    ],
+                  },
+                },
+              ],
+            },
           },
         },
         inProgressTasks: {
-          $filter: {
-            input: "$allTasks",
-            cond: { $eq: ["$$this.status", "in_progress"] },
+          $map: {
+            input: {
+              $filter: {
+                input: "$allTasks",
+                cond: { $eq: ["$$this.status", "in_progress"] },
+              },
+            },
+            as: "task",
+            in: {
+              $mergeObjects: [
+                "$$task",
+                {
+                  contextPath: {
+                    $concat: [
+                      {
+                        $ifNull: [
+                          { $arrayElemAt: ["$company.name", 0] },
+                          "Unknown Company",
+                        ],
+                      },
+                      "/",
+                      "$name",
+                      "/",
+                      "$$task.title",
+                    ],
+                  },
+                },
+              ],
+            },
           },
         },
         completedTasks: {
-          $filter: {
-            input: "$allTasks",
-            cond: { $eq: ["$$this.status", "completed"] },
+          $map: {
+            input: {
+              $filter: {
+                input: "$allTasks",
+                cond: { $eq: ["$$this.status", "completed"] },
+              },
+            },
+            as: "task",
+            in: {
+              $mergeObjects: [
+                "$$task",
+                {
+                  contextPath: {
+                    $concat: [
+                      {
+                        $ifNull: [
+                          { $arrayElemAt: ["$company.name", 0] },
+                          "Unknown Company",
+                        ],
+                      },
+                      "/",
+                      "$name",
+                      "/",
+                      "$$task.title",
+                    ],
+                  },
+                },
+              ],
+            },
           },
         },
       },
@@ -537,6 +703,12 @@ exports.getProjectsOfTabQuery = (channelId, tabId) => {
     },
     {
       $unwind: {
+        path: "$company",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $unwind: {
         path: "$channel",
         preserveNullAndEmptyArrays: true,
       },
@@ -570,6 +742,14 @@ exports.getProjectsOfTabQuery = (channelId, tabId) => {
         taskStats: 1,
         progress: {
           $round: ["$progress", 1], // Round to 1 decimal place
+        },
+        // Context path for projects: company/project
+        contextPath: {
+          $concat: [
+            { $ifNull: ["$company.name", "Unknown Company"] },
+            "/",
+            "$name",
+          ],
         },
         // Project status indicators
         isOverdue: {

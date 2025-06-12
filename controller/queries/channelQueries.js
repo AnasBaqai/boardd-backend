@@ -77,8 +77,22 @@ exports.getAllChannelsOfUserQuery = (userId) => {
       },
     },
     {
+      $lookup: {
+        from: "companies",
+        localField: "companyId",
+        foreignField: "_id",
+        as: "companyDetails",
+      },
+    },
+    {
       $unwind: {
         path: "$creatorDetails",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $unwind: {
+        path: "$companyDetails",
         preserveNullAndEmptyArrays: true,
       },
     },
@@ -128,6 +142,10 @@ exports.getAllChannelsOfUserQuery = (userId) => {
           _id: "$creatorDetails._id",
           name: "$creatorDetails.name",
           email: "$creatorDetails.email",
+        },
+        company: {
+          _id: "$companyDetails._id",
+          name: "$companyDetails.name",
         },
       },
     },
