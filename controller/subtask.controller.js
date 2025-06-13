@@ -1,7 +1,7 @@
 "use strict";
 
 const { parseBody, generateResponse } = require("../utils");
-const { STATUS_CODES } = require("../utils/constants");
+const { STATUS_CODES, ACTION_TYPE } = require("../utils/constants");
 const { findUser } = require("../models/userModel");
 const { findTask } = require("../models/taskModel");
 const { findProject } = require("../models/projectModel");
@@ -100,7 +100,7 @@ exports.createSubtask = async (req, res, next) => {
       taskId,
       subtaskId: subtask._id,
       userId,
-      actionType: "CREATE_SUBTASK",
+      actionType: ACTION_TYPE.CREATE_SUBTASK,
       timestamp: new Date(),
       message: createSubtaskMessage,
     });
@@ -268,10 +268,12 @@ exports.updateSubtask = async (req, res, next) => {
               taskId: subtask.taskId,
               subtaskId: subtask._id,
               userId,
-              actionType: "UPDATE_SUBTASK",
+              actionType: ACTION_TYPE.UPDATE_SUBTASK,
               field,
               previousValue: previousValues[field],
               newValue: value,
+              message: `Updated ${field} from ${previousValues[field]} to ${value}`,
+              timestamp: new Date(),
             });
           }
         })
@@ -342,7 +344,9 @@ exports.deleteSubtask = async (req, res, next) => {
       taskId: subtask.taskId,
       subtaskId: subtask._id,
       userId,
-      actionType: "DELETE_SUBTASK",
+      actionType: ACTION_TYPE.DELETE_SUBTASK,
+      timestamp: new Date(),
+      message: `Subtask "${subtask.title}" in task "${subtask.task.title}" has been deleted`,
     });
 
     // Delete subtask

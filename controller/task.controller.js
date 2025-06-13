@@ -1,7 +1,7 @@
 "use strict";
 
 const { parseBody, generateResponse } = require("../utils");
-const { STATUS_CODES } = require("../utils/constants");
+const { STATUS_CODES, ACTION_TYPE } = require("../utils/constants");
 const { findUser } = require("../models/userModel");
 const { findProject } = require("../models/projectModel");
 const { createTask, findTask, updateTask } = require("../models/taskModel");
@@ -289,7 +289,7 @@ exports.createTask = async (req, res, next) => {
           taskId: task._id,
           subtaskId: subtask._id,
           userId,
-          actionType: "CREATE_SUBTASK",
+          actionType: ACTION_TYPE.CREATE_SUBTASK,
           timestamp: new Date(),
           message: createSubtaskMessage,
         });
@@ -527,7 +527,7 @@ exports.batchUpdateTask = async (req, res, next) => {
         projectId: task.projectId,
         taskId: task._id,
         userId,
-        actionType: "UPDATE_TASK",
+        actionType: ACTION_TYPE.UPDATE_TASK,
         field,
         previousValue: previousValues[field],
         newValue: value,

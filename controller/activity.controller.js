@@ -1,7 +1,7 @@
 "use strict";
 
 const { generateResponse } = require("../utils");
-const { STATUS_CODES } = require("../utils/constants");
+const { STATUS_CODES, ACTION_TYPE } = require("../utils/constants");
 const { findProject } = require("../models/projectModel");
 const { findTask } = require("../models/taskModel");
 const {
@@ -99,10 +99,10 @@ const formatActivityText = (activity) => {
   const userName = user?.name || "A user";
 
   switch (actionType) {
-    case "CREATE_TASK":
+    case ACTION_TYPE.CREATE_TASK:
       return `${userName} created this task`;
 
-    case "UPDATE_TASK":
+    case ACTION_TYPE.UPDATE_TASK:
       switch (field) {
         case "title":
           return `${userName} changed the title to "${newValue}"`;
@@ -125,13 +125,13 @@ const formatActivityText = (activity) => {
           return `${userName} updated the task`;
       }
 
-    case "DELETE_TASK":
+    case ACTION_TYPE.DELETE_TASK:
       return `${userName} deleted this task`;
 
-    case "CREATE_SUBTASK":
+    case ACTION_TYPE.CREATE_SUBTASK:
       return `${userName} created a subtask`;
 
-    case "UPDATE_SUBTASK":
+    case ACTION_TYPE.UPDATE_SUBTASK:
       switch (field) {
         case "title":
           return `${userName} changed the subtask title to "${newValue}"`;
@@ -143,7 +143,7 @@ const formatActivityText = (activity) => {
           return `${userName} updated a subtask`;
       }
 
-    case "DELETE_SUBTASK":
+    case ACTION_TYPE.DELETE_SUBTASK:
       return `${userName} deleted a subtask`;
 
     default:
