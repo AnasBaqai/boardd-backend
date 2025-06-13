@@ -17,6 +17,12 @@ const {
   handleDueDateActivity,
   handleAssignmentActivitiesAndNotifications,
   prepareTaskEventPayload,
+  handleDescriptionActivity,
+  handleTagsActivity,
+  handleStrokeColorActivity,
+  handleAttachmentsActivity,
+  handleCustomFieldsActivity,
+  handleChecklistActivity,
 } = require("./helpers/tasks/task.helper");
 const { getTaskByIdQuery } = require("./queries/tasksQueries");
 const { getAllTasks } = require("../models/taskModel");
@@ -61,6 +67,8 @@ exports.createTask = async (req, res, next) => {
       type,
       attachments,
       customFields,
+      checklist,
+      subtasks,
     } = parseBody(req.body);
 
     // Check if project exists and get context
@@ -112,6 +120,7 @@ exports.createTask = async (req, res, next) => {
       type: type || "task",
       attachments: attachments || [],
       customFields: customFields || [],
+      checklist: checklist || [],
       createdBy: userId,
     });
 
@@ -141,7 +150,6 @@ exports.createTask = async (req, res, next) => {
       tab,
       contextPath,
     });
-    activities = [...activities, ...taskCreationResult.activities];
     notifications = [...notifications, ...taskCreationResult.notifications];
 
     // 2. Handle priority setting activity
@@ -187,6 +195,147 @@ exports.createTask = async (req, res, next) => {
       notifications = [...notifications, ...assignmentResult.notifications];
     }
 
+    // 5. Handle description setting activity
+    if (description && description.trim() !== "") {
+      const descriptionActivity = await handleDescriptionActivity({
+        description,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(descriptionActivity);
+    }
+
+    // 6. Handle tags setting activity
+    if (tags && tags.length > 0) {
+      const tagsActivity = await handleTagsActivity({
+        tags,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(tagsActivity);
+    }
+
+    // 7. Handle stroke color setting activity
+    if (strokeColor && strokeColor !== "#6C63FF") {
+      const strokeColorActivity = await handleStrokeColorActivity({
+        strokeColor,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(strokeColorActivity);
+    }
+
+    // 8. Handle attachments setting activity
+    if (attachments && attachments.length > 0) {
+      const attachmentsActivity = await handleAttachmentsActivity({
+        attachments,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(attachmentsActivity);
+    }
+
+    // 9. Handle custom fields setting activity
+    if (customFields && customFields.length > 0) {
+      const customFieldsActivity = await handleCustomFieldsActivity({
+        customFields,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(customFieldsActivity);
+    }
+
+    // 10. Handle checklist setting activity
+    if (checklist && checklist.length > 0) {
+      const checklistActivity = await handleChecklistActivity({
+        checklist,
+        userName,
+        task,
+        projectId,
+        userId,
+      });
+      activities.push(checklistActivity);
+    }
+
+    // --- Create subtasks if provided ---
+    let createdSubtasks = [];
+    if (Array.isArray(subtasks) && subtasks.length > 0) {
+      for (const subtaskData of subtasks) {
+        const subtask = await require("../models/subtaskModel").createSubtask({
+          title: subtaskData.title,
+          taskId: task._id,
+          projectId: projectId,
+          createdBy: userId,
+          assignedTo: subtaskData.assignedTo || [],
+        });
+
+        // Activity and notification logic (reuse from createSubtask)
+        const createSubtaskMessage = {
+          forCreator: `You created subtask "${subtask.title}" for task "${task.title}"`,
+          forOthers: `${userName} created subtask "${subtask.title}" for task "${task.title}"`,
+        };
+        const activity = await createActivity({
+          projectId: projectId,
+          taskId: task._id,
+          subtaskId: subtask._id,
+          userId,
+          actionType: "CREATE_SUBTASK",
+          timestamp: new Date(),
+          message: createSubtaskMessage,
+        });
+        activities.push(activity);
+
+        // Notifications for tab members
+        for (const memberId of tab.members) {
+          await createNotification({
+            userId: memberId,
+            type: "CHANNEL",
+            projectId: projectId,
+            channelId: channel._id,
+            tabId: tab._id,
+            taskId: task._id,
+            createdBy: userId,
+            title: "New Subtask Created",
+            message:
+              memberId.toString() === userId.toString()
+                ? createSubtaskMessage.forCreator
+                : createSubtaskMessage.forOthers,
+            contextPath,
+          });
+        }
+        // Notifications for assigned users
+        if (subtaskData.assignedTo && subtaskData.assignedTo.length > 0) {
+          for (const assigneeId of subtaskData.assignedTo) {
+            if (assigneeId !== userId) {
+              await createNotification({
+                userId: assigneeId,
+                type: "MENTION",
+                projectId: projectId,
+                channelId: channel._id,
+                tabId: tab._id,
+                taskId: task._id,
+                createdBy: userId,
+                title: "Subtask Assignment",
+                message: `${userName} assigned you to subtask "${subtask.title}" in task "${task.title}"`,
+                contextPath,
+              });
+            }
+          }
+        }
+        createdSubtasks.push(subtask);
+      }
+    }
+
     // Save all notifications
     await Promise.all(notifications);
 
@@ -229,7 +378,7 @@ exports.createTask = async (req, res, next) => {
     }
 
     return generateResponse(
-      task,
+      { task, subtasks: createdSubtasks },
       "Task created successfully",
       res,
       STATUS_CODES.CREATED
@@ -339,6 +488,11 @@ exports.batchUpdateTask = async (req, res, next) => {
       previousValues[field] = task[field];
     });
 
+    // Parse dueDate if present
+    if (updates.dueDate !== undefined) {
+      updates.dueDate = parseDate(updates.dueDate);
+    }
+
     // Update task with all changes
     const updatedTask = await updateTask(
       { _id: taskId },
@@ -384,26 +538,6 @@ exports.batchUpdateTask = async (req, res, next) => {
 
       // Create notifications based on field type
       switch (field) {
-        case "status":
-          // Work in Progress notification
-          if (value === "in_progress") {
-            notifications.push(
-              createNotification({
-                userId: task.createdBy,
-                type: "WORK_IN_PROGRESS",
-                projectId: task.projectId,
-                channelId: project.channelId,
-                tabId: project.tabId,
-                taskId: task._id,
-                createdBy: userId,
-                title: "Task Status Update",
-                message: message.forOthers,
-                contextPath,
-              })
-            );
-          }
-          break;
-
         case "assignedTo":
           // Handle new assignees (Mentions)
           const newAssignees = value.filter(

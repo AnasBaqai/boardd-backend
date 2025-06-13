@@ -26,6 +26,15 @@ const customFieldSchema = new Schema({
   },
 });
 
+const checklistItemSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    isCompleted: { type: Boolean, default: false },
+    order: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const taskSchema = new Schema({
   title: { type: String, required: true },
   description: { type: String, default: "" },
@@ -49,6 +58,7 @@ const taskSchema = new Schema({
   isActive: { type: Boolean, default: true },
   attachments: [{ type: String }],
   customFields: [customFieldSchema], // Add custom fields array
+  checklist: { type: [checklistItemSchema], default: [] },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

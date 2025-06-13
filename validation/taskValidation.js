@@ -133,6 +133,40 @@ const createTaskValidation = Joi.object({
     .messages({
       "array.base": "Custom fields must be an array",
     }),
+
+  checklist: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().required(),
+        isCompleted: Joi.boolean().default(false),
+        order: Joi.number().default(0),
+      })
+    )
+    .optional()
+    .default([]),
+
+  subtasks: Joi.array()
+    .items(
+      Joi.object({
+        title: Joi.string().trim().min(1).max(200).required().messages({
+          "string.empty": "Subtask title is required",
+          "string.min": "Subtask title must be at least 1 character long",
+          "string.max": "Subtask title cannot exceed 200 characters",
+        }),
+        assignedTo: Joi.array()
+          .items(helpers.objectIdValidation)
+          .optional()
+          .default([])
+          .messages({
+            "array.base": "Assigned to must be an array of valid user IDs",
+          }),
+      })
+    )
+    .optional()
+    .default([])
+    .messages({
+      "array.base": "Subtasks must be an array",
+    }),
 });
 
 // Batch update task validation schema
@@ -185,6 +219,10 @@ const batchUpdateTaskValidation = Joi.object({
         "Stroke color must be a valid hex color (e.g., #6C63FF)",
     }),
 
+  type: Joi.string().optional().messages({
+    "string.base": "Type must be a string",
+  }),
+
   attachments: Joi.array().items(Joi.string().uri()).optional().messages({
     "array.base": "Attachments must be an array of valid URLs",
     "string.uri": "Each attachment must be a valid URL",
@@ -193,6 +231,16 @@ const batchUpdateTaskValidation = Joi.object({
   customFields: Joi.array().items(customFieldSchema).optional().messages({
     "array.base": "Custom fields must be an array",
   }),
+
+  checklist: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().required(),
+        isCompleted: Joi.boolean().default(false),
+        order: Joi.number().default(0),
+      })
+    )
+    .optional(),
 })
   .min(1)
   .messages({

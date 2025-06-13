@@ -214,3 +214,181 @@ exports.prepareTaskEventPayload = ({
     },
   },
 });
+
+/**
+ * Handle description setting activity
+ */
+exports.handleDescriptionActivity = async ({
+  description,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const descriptionMessage = generateActivityMessage("description", userName, {
+    previousValue: null,
+    newValue: description,
+    taskTitle: task.title,
+    isCreation: true,
+  });
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "description",
+    newValue: description,
+    timestamp: new Date(),
+    message: descriptionMessage,
+  });
+};
+
+/**
+ * Handle tags setting activity
+ */
+exports.handleTagsActivity = async ({
+  tags,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const tagsMessage = generateActivityMessage("tags", userName, {
+    previousValue: [],
+    newValue: tags,
+    taskTitle: task.title,
+    isCreation: true,
+  });
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "tags",
+    newValue: tags,
+    timestamp: new Date(),
+    message: tagsMessage,
+  });
+};
+
+/**
+ * Handle stroke color setting activity
+ */
+exports.handleStrokeColorActivity = async ({
+  strokeColor,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const strokeColorMessage = generateActivityMessage("strokeColor", userName, {
+    previousValue: null,
+    newValue: strokeColor,
+    taskTitle: task.title,
+    isCreation: true,
+  });
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "strokeColor",
+    newValue: strokeColor,
+    timestamp: new Date(),
+    message: strokeColorMessage,
+  });
+};
+
+/**
+ * Handle attachments setting activity
+ */
+exports.handleAttachmentsActivity = async ({
+  attachments,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const attachmentsMessage = generateActivityMessage("attachments", userName, {
+    previousValue: [],
+    newValue: attachments,
+    taskTitle: task.title,
+    isCreation: true,
+  });
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "attachments",
+    newValue: attachments,
+    timestamp: new Date(),
+    message: attachmentsMessage,
+  });
+};
+
+/**
+ * Handle custom fields setting activity
+ */
+exports.handleCustomFieldsActivity = async ({
+  customFields,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const customFieldsMessage = generateActivityMessage(
+    "customFields",
+    userName,
+    {
+      previousValue: [],
+      newValue: customFields,
+      taskTitle: task.title,
+      isCreation: true,
+    }
+  );
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "customFields",
+    newValue: customFields,
+    timestamp: new Date(),
+    message: customFieldsMessage,
+  });
+};
+
+/**
+ * Handle checklist setting activity
+ */
+exports.handleChecklistActivity = async ({
+  checklist,
+  userName,
+  task,
+  projectId,
+  userId,
+}) => {
+  const checklistMessage = generateActivityMessage("checklist", userName, {
+    previousValue: [],
+    newValue: checklist,
+    taskTitle: task.title,
+    isCreation: true,
+  });
+
+  return createActivity({
+    projectId,
+    taskId: task._id,
+    userId,
+    actionType: ACTION_TYPE.UPDATE_TASK,
+    field: "checklist",
+    newValue: checklist,
+    timestamp: new Date(),
+    message: checklistMessage,
+  });
+};
