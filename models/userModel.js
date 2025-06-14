@@ -73,7 +73,7 @@ const userSchema = new Schema(
     fcmToken: { type: String },
 
     // New refresh token system
-    refreshTokens: { type: [refreshTokenSchema], select: false },
+    refreshTokens: [refreshTokenSchema],
 
     // Last login tracking
     lastLoginAt: {
@@ -84,6 +84,13 @@ const userSchema = new Schema(
     maxActiveDevices: {
       type: Number,
       default: 5, // Maximum number of devices that can be logged in simultaneously
+    },
+
+    // Guest account expiry
+    expiresAt: {
+      type: Date,
+      default: null, // null for regular users, Date for guests
+      index: true, // For efficient cleanup queries
     },
   },
   { timestamps: true }

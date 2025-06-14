@@ -11,6 +11,7 @@ const {
   handleInviteSignup,
   handleRegularLogin,
   handleDomainSignup,
+  handleGuestSignup,
 } = require("./login.helper");
 const { STATUS_CODES } = require("../../../utils/constants");
 
@@ -19,7 +20,18 @@ const { STATUS_CODES } = require("../../../utils/constants");
  */
 exports.determineLoginStrategy = async (token, joinToken, email) => {
   if (token) {
-    return { type: "INVITE_SIGNUP", data: { token } };
+    // Check if token is for guest signup or company signup
+    const inviteSlot = await findInviteSlot({ token });
+    if (!inviteSlot || inviteSlot.used) {
+      return { type: "INVALID_TOKEN", data: { token } };
+    }
+
+    // Differentiate based on slot type
+    if (inviteSlot.isGuestInviteSlot) {
+      return { type: "GUEST_SIGNUP", data: { token, inviteSlot } };
+    } else {
+      return { type: "INVITE_SIGNUP", data: { token, inviteSlot } };
+    }
   }
 
   if (joinToken) {
@@ -39,11 +51,10 @@ exports.determineLoginStrategy = async (token, joinToken, email) => {
  * Handle invite-based signup flow
  */
 exports.handleInviteFlow = async (strategyData, userData, req, res, next) => {
-  const { token } = strategyData;
+  const { token, inviteSlot } = strategyData;
   const { name, email, password } = userData;
 
-  // Validate invite token and get company
-  const inviteSlot = await findInviteSlot({ token });
+  // Use the inviteSlot from strategy data (already validated)
   if (!inviteSlot || inviteSlot?.used) {
     return next({
       statusCode: STATUS_CODES.NOT_FOUND,
@@ -74,7 +85,15 @@ exports.handleInviteFlow = async (strategyData, userData, req, res, next) => {
   );
 
   if (result?.statusCode === STATUS_CODES.SUCCESS) {
-    await updateInviteSlot({ _id: inviteSlot._id }, { used: true });
+    await updateInviteSlot(
+      {
+        _id: inviteSlot._id,
+      },
+      {
+        used: true,
+        inviteType: "company",
+      }
+    );
   }
 
   return result;
@@ -225,6 +244,48 @@ exports.handleDomainFlow = async (strategyData, userData, req, res, next) => {
         usedBy: result.data?.user?._id, // Get user ID from response
         usedAt: new Date(),
         inviteType: "company",
+      }
+    );
+  }
+
+  return result;
+};
+
+/**
+ * Handle guest signup flow
+ */
+exports.handleGuestFlow = async (strategyData, userData, req, res, next) => {
+  const { token, inviteSlot } = strategyData;
+  const { name, email, password } = userData;
+
+  const company = await findCompany({ _id: inviteSlot?.companyId });
+  if (!company) {
+    return next({
+      statusCode: STATUS_CODES.NOT_FOUND,
+      message: "Company not found",
+    });
+  }
+
+  // Handle guest signup with 3-month expiry
+  const result = await handleGuestSignup(
+    name,
+    email,
+    password,
+    company,
+    inviteSlot,
+    req,
+    res,
+    next
+  );
+
+  if (result?.statusCode === STATUS_CODES.SUCCESS) {
+    await updateInviteSlot(
+      {
+        _id: inviteSlot._id,
+      },
+      {
+        used: true,
+        inviteType: "guest",
       }
     );
   }

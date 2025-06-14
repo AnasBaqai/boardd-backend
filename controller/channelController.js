@@ -123,10 +123,10 @@ exports.getChannelJoiningLink = async (req, res, next) => {
 
     // Generate company link (backward compatible)
     if (companySlot) {
-      joiningLink = `${baseUrl}/invite/channel/${companySlot.token}?flow=company&channelId=${channel._id}`;
+      joiningLink = `${baseUrl}/invite/channel/${companySlot.token}?flow=company&channelId=${channel._id}&companyId=${company.domain}`;
     } else {
       // Fallback to old channel token if no company slots available
-      joiningLink = `${baseUrl}/join-channel?token=${channel.channelToken}`;
+      joiningLink = `${baseUrl}/join-channel?token=${channel.channelToken}&companyId=${company.domain}`;
       errors.push("No company invite slots available - using fallback link");
     }
 
@@ -137,7 +137,7 @@ exports.getChannelJoiningLink = async (req, res, next) => {
     });
 
     if (guestSlot) {
-      guestLink = `${baseUrl}/invite/channel/${guestSlot.token}?flow=guest&channelId=${channel._id}`;
+      guestLink = `${baseUrl}/invite/channel/${guestSlot.token}?flow=guest&channelId=${channel._id}&companyId=${company.domain}`;
     } else {
       errors.push("No guest invite slots available");
     }
@@ -644,10 +644,10 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
           // Use slot token for non-company members
           inviteLink = `${baseUrl}/invite/channel/${availableSlot.token}?flow=${
             isGuestInvite ? "guest" : "company"
-          }&channelId=${channel._id}`;
+          }&channelId=${channel._id}&companyId=${company.domain}`;
         } else {
           // Use channel token for existing company members
-          inviteLink = `${baseUrl}/join-channel?token=${channel.channelToken}&channelId=${channel._id}`;
+          inviteLink = `${baseUrl}/join-channel?token=${channel.channelToken}&channelId=${channel._id}&companyId=${company.domain}`;
         }
 
         // Prepare email content
@@ -679,7 +679,7 @@ exports.sendChannelInviteEmails = async (req, res, next) => {
               reserved: true,
               reservedFor: email,
               channelId: channel._id,
-              inviteType: isGuestInvite ? "channel_guest" : "channel_company",
+              inviteType: isGuestInvite ? "guest" : "company",
               reservedAt: new Date(),
             }
           );

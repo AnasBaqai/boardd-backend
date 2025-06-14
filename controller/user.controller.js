@@ -32,6 +32,7 @@ const {
   handleRegularFlow,
   handlePublicFlow,
   handleInviteFlow,
+  handleGuestFlow,
 } = require("./helpers/users/login.flow");
 
 exports.signup = async (req, res, next) => {
@@ -145,6 +146,15 @@ exports.login = async (req, res, next) => {
 
     // Execute the appropriate strategy
     switch (loginStrategy.type) {
+      case "GUEST_SIGNUP":
+        return await handleGuestFlow(
+          loginStrategy.data,
+          { name, email, password },
+          req,
+          res,
+          next
+        );
+
       case "INVITE_SIGNUP":
         return await handleInviteFlow(
           loginStrategy.data,
@@ -164,6 +174,16 @@ exports.login = async (req, res, next) => {
         );
 
       case "REGULAR_LOGIN":
+        // Check account expiry before login
+        const user = loginStrategy.data.user;
+        if (user.expiresAt && new Date() > user.expiresAt) {
+          return next({
+            statusCode: STATUS_CODES.UNAUTHORIZED,
+            message:
+              "Your account has expired. Please contact support for renewal.",
+          });
+        }
+
         return await handleRegularFlow(
           loginStrategy.data,
           { email, password },
@@ -180,6 +200,12 @@ exports.login = async (req, res, next) => {
           res,
           next
         );
+
+      case "INVALID_TOKEN":
+        return next({
+          statusCode: STATUS_CODES.BAD_REQUEST,
+          message: "Invalid or expired invite token",
+        });
 
       default:
         return next({

@@ -14,7 +14,7 @@ const InviteSlotSchema = new Schema({
   channelId: { type: Types.ObjectId, ref: "Channel" }, // Only for channel invites
   inviteType: {
     type: String,
-    enum: ["company", "channel_guest", "channel_company"],
+    enum: ["company", "guest"],
     default: "company",
   },
 

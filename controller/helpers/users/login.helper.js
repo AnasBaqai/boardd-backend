@@ -282,3 +282,67 @@ exports.handleRegularLogin = async (
     });
   }
 };
+
+exports.handleGuestSignup = async (
+  name,
+  email,
+  password,
+  company,
+  inviteSlot,
+  req,
+  res,
+  next
+) => {
+  try {
+    // Check if user with this email already exists
+    const existingUser = await findUser({ email });
+    if (existingUser) {
+      return next({
+        statusCode: STATUS_CODES.CONFLICT,
+        message: "User already exists",
+      });
+    }
+
+    // For guests, we don't validate domain match - they can be from any domain
+
+    // Check if the slot is reserved for a specific email (guest invites can be reserved too)
+    if (
+      inviteSlot?.reserved &&
+      inviteSlot?.reservedFor &&
+      inviteSlot.reservedFor !== email
+    ) {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "This invite link is reserved for a different email address",
+      });
+    }
+
+    // Calculate 3-month expiry for guest account
+    const threeMonthsFromNow = new Date();
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+
+    // Create user data with guest role and expiry
+    const userData = {
+      name,
+      email,
+      password,
+      companyId: company._id,
+      isActive: true, // Guest users are active by default
+      role: ROLES.GUEST, // Always guest role
+      expiresAt: threeMonthsFromNow, // 3-month expiry for guests
+    };
+
+    return await createUserAndResponse(
+      userData,
+      req,
+      res,
+      "Guest account created successfully (expires in 3 months)"
+    );
+  } catch (error) {
+    console.error("Error in handleGuestSignup:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to process guest signup",
+    });
+  }
+};
