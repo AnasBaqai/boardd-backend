@@ -1,7 +1,12 @@
 "use strict";
 
 const { parseBody, generateResponse } = require("../utils");
-const { STATUS_CODES, ACTION_TYPE } = require("../utils/constants");
+const {
+  STATUS_CODES,
+  ACTION_TYPE,
+  TASK_STATUS,
+  TASK_PRIORITY,
+} = require("../utils/constants");
 const { findUser } = require("../models/userModel");
 const { findProject } = require("../models/projectModel");
 const { createTask, findTask, updateTask } = require("../models/taskModel");
@@ -112,8 +117,8 @@ exports.createTask = async (req, res, next) => {
       description: description || "",
       projectId,
       assignedTo: assignedTo || [],
-      status: status || "todo",
-      priority: priority || "medium",
+      status: status || TASK_STATUS.TODO,
+      priority: priority || TASK_PRIORITY.MEDIUM,
       dueDate: parseDate(dueDate) || null,
       tags: tags || [],
       strokeColor: strokeColor || "#6C63FF",

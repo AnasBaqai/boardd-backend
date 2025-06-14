@@ -4,7 +4,11 @@ const { Schema, model, Types } = require("mongoose");
 const mongoosePaginate = require("mongoose-paginate-v2");
 const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
 const { getMongooseAggregatePaginatedData } = require("../utils");
-const { CUSTOM_FIELD_TYPES } = require("../utils/constants");
+const {
+  CUSTOM_FIELD_TYPES,
+  TASK_STATUS,
+  TASK_PRIORITY,
+} = require("../utils/constants");
 
 const customFieldSchema = new Schema({
   name: { type: String, required: true },
@@ -43,13 +47,13 @@ const taskSchema = new Schema({
   assignedTo: [{ type: Types.ObjectId, ref: "User" }],
   status: {
     type: String,
-    enum: ["todo", "in_progress", "completed"],
-    default: "todo",
+    enum: Object.values(TASK_STATUS),
+    default: TASK_STATUS.TODO,
   },
   priority: {
     type: String,
-    enum: ["low", "medium", "high"],
-    default: "medium",
+    enum: Object.values(TASK_PRIORITY),
+    default: TASK_PRIORITY.MEDIUM,
   },
   dueDate: { type: Date },
   tags: [{ type: String }],

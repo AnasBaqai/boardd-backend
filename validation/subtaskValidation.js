@@ -1,5 +1,6 @@
 const Joi = require("joi");
 const { helpers } = require("./authValidation");
+const { TASK_STATUS, TASK_PRIORITY } = require("../utils/constants");
 
 // Create subtask validation schema
 const createSubtaskValidation = Joi.object({
@@ -26,19 +27,23 @@ const createSubtaskValidation = Joi.object({
     }),
 
   status: Joi.string()
-    .valid("todo", "in_progress", "completed")
+    .valid(...Object.values(TASK_STATUS))
     .optional()
-    .default("todo")
+    .default(TASK_STATUS.TODO)
     .messages({
-      "any.only": "Status must be one of: todo, in_progress, completed",
+      "any.only": `Status must be one of: ${Object.values(TASK_STATUS).join(
+        ", "
+      )}`,
     }),
 
   priority: Joi.string()
-    .valid("low", "medium", "high")
+    .valid(...Object.values(TASK_PRIORITY))
     .optional()
-    .default("medium")
+    .default(TASK_PRIORITY.MEDIUM)
     .messages({
-      "any.only": "Priority must be one of: low, medium, high",
+      "any.only": `Priority must be one of: ${Object.values(TASK_PRIORITY).join(
+        ", "
+      )}`,
     }),
 
   dueDate: Joi.date().optional().messages({
@@ -74,15 +79,22 @@ const updateSubtaskValidation = Joi.object({
     }),
 
   status: Joi.string()
-    .valid("todo", "in_progress", "completed")
+    .valid(...Object.values(TASK_STATUS))
     .optional()
     .messages({
-      "any.only": "Status must be one of: todo, in_progress, completed",
+      "any.only": `Status must be one of: ${Object.values(TASK_STATUS).join(
+        ", "
+      )}`,
     }),
 
-  priority: Joi.string().valid("low", "medium", "high").optional().messages({
-    "any.only": "Priority must be one of: low, medium, high",
-  }),
+  priority: Joi.string()
+    .valid(...Object.values(TASK_PRIORITY))
+    .optional()
+    .messages({
+      "any.only": `Priority must be one of: ${Object.values(TASK_PRIORITY).join(
+        ", "
+      )}`,
+    }),
 
   dueDate: Joi.date().optional().allow(null).messages({
     "date.base": "Due date must be a valid date",

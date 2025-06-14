@@ -116,3 +116,17 @@ exports.ACTION_TYPE = Object.freeze({
   UPDATE_CUSTOM_FIELD: "UPDATE_CUSTOM_FIELD",
   DELETE_CUSTOM_FIELD: "DELETE_CUSTOM_FIELD",
 });
+
+// Task status constants
+exports.TASK_STATUS = Object.freeze({
+  TODO: "todo",
+  IN_PROGRESS: "in_progress",
+  COMPLETED: "completed",
+});
+
+// Task priority constants
+exports.TASK_PRIORITY = Object.freeze({
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+});
