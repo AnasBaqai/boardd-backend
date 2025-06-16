@@ -11,6 +11,7 @@ const { STATUS_CODES } = require("../utils/constants");
 const {
   getAllTabsOfMemberInChannelQuery,
   getAllTabMembersQuery,
+  getTabMembersPaginatedQuery,
 } = require("./queries/channelTabsQuery");
 const { findCompany } = require("../models/companyModel");
 const { findUser } = require("../models/userModel");
@@ -202,6 +203,7 @@ exports.getAllTabsOfChannel = async (req, res, next) => {
 exports.getAllTabMembers = async (req, res, next) => {
   try {
     const { tabId } = req.params;
+    const { page, limit } = req.query;
     const userId = req.user.id;
 
     // Get current user to check their company
@@ -238,24 +240,17 @@ exports.getAllTabMembers = async (req, res, next) => {
       });
     }
 
-    // Get all members with their details
-    const query = getAllTabMembersQuery(tabId);
+    // Get paginated members
+    const query = getTabMembersPaginatedQuery(tabId);
     const result = await getAllTabs({
       query,
-      page: 1,
-      limit: 1,
-      responseKey: "tab",
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      responseKey: "members",
     });
 
-    if (!result.tab.length) {
-      return next({
-        statusCode: STATUS_CODES.NOT_FOUND,
-        message: "No members found",
-      });
-    }
-
     return generateResponse(
-      result.tab[0],
+      result,
       "Tab members fetched successfully",
       res,
       STATUS_CODES.SUCCESS

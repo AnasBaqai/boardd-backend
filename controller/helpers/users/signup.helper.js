@@ -37,7 +37,7 @@ exports.createInviteSlots = async (companyId, createManyInviteSlots) => {
     slot: companySlotCount + i + 1, // Continue slot numbering
     token: exports.generateJoinToken(),
     isGuestInviteSlot: true,
-    inviteType: "channel_guest",
+    inviteType: "guest",
   }));
 
   // Combine and create all slots

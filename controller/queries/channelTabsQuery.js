@@ -49,7 +49,7 @@ exports.getAllTabsOfMemberInChannelQuery = (channelId, userId) => {
   ];
 };
 
-// get all members of a tab with their details
+// get all members of a tab with their details (returns tab with nested members - original)
 exports.getAllTabMembersQuery = (tabId) => {
   return [
     {
@@ -105,6 +105,71 @@ exports.getAllTabMembersQuery = (tabId) => {
           },
         },
         totalMembers: { $size: "$memberDetails" },
+      },
+    },
+  ];
+};
+
+// get members of a tab as individual documents for pagination
+exports.getTabMembersPaginatedQuery = (tabId) => {
+  return [
+    {
+      $match: {
+        _id: Types.ObjectId.isValid(tabId)
+          ? Types.ObjectId.createFromHexString(tabId)
+          : null,
+      },
+    },
+    {
+      // Unwind the members array to get individual member documents
+      $unwind: {
+        path: "$members",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      // Lookup user details for each member
+      $lookup: {
+        from: "users",
+        let: { memberId: "$members" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$_id", "$$memberId"] },
+                  { $eq: ["$isActive", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "memberDetails",
+      },
+    },
+    {
+      // Unwind member details (should be only one user per member)
+      $unwind: {
+        path: "$memberDetails",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      // Project the final member structure (simplified)
+      $project: {
+        _id: "$memberDetails._id",
+        name: "$memberDetails.name",
+        email: "$memberDetails.email",
+        role: "$memberDetails.role",
+        isActive: "$memberDetails.isActive",
+        joinedAt: "$memberDetails.createdAt",
+      },
+    },
+    {
+      // Sort by name for consistent pagination
+      $sort: {
+        name: 1,
+        _id: 1, // Secondary sort for consistent pagination
       },
     },
   ];
