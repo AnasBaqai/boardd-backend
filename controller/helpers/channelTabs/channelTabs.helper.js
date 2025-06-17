@@ -21,7 +21,7 @@ exports.getAdminsAndMergeMembers = async (companyId, existingMembers = []) => {
 
     // Merge and remove duplicates
     const uniqueMembers = [...new Set([...existingMemberStrings, ...adminIds])];
-
+    console.log("uniqueMembers", uniqueMembers);
     return uniqueMembers;
   } catch (error) {
     console.error("Error getting admins and merging members:", error);

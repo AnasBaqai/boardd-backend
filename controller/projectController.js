@@ -4,6 +4,7 @@ const { createProject, getAllProjects } = require("../models/projectModel");
 const { findUser } = require("../models/userModel");
 const { parseBody, generateResponse, formatDate } = require("../utils");
 const { STATUS_CODES } = require("../utils/constants");
+const { emitTaskEvent } = require("../utils/socket");
 const {
   getProjectsOfTabQuery,
   getProjectsOverviewQuery,
@@ -47,6 +48,26 @@ exports.CreateProject = async (req, res, next) => {
     const companyId = tab?.companyId;
     const channelId = tab?.channelId;
 
+    // Get user and channel information for socket context
+    const [user, channel] = await Promise.all([
+      findUser({ _id: userId }),
+      findChannel({ _id: channelId }),
+    ]);
+
+    if (!user) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "User not found",
+      });
+    }
+
+    if (!channel) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Channel not found",
+      });
+    }
+
     // create project
     const project = await createProject({
       name,
@@ -59,6 +80,40 @@ exports.CreateProject = async (req, res, next) => {
       endDate: parseDate(endDate),
       color,
       priority,
+    });
+
+    // Emit project creation notification (no activity tracking for projects)
+    const userName = user.name || user.email;
+    const contextPath = `${channel.channelName} / ${tab.tabName}`;
+
+    emitTaskEvent({
+      tabId: tab._id,
+      type: "PROJECT_CREATED",
+      payload: {
+        project: {
+          _id: project._id,
+          name: project.name,
+          description: project.description,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          color: project.color,
+          priority: project.priority,
+          createdBy: project.createdBy,
+          createdAt: project.createdAt,
+        },
+        updatedBy: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+        },
+        context: {
+          channelId: channel._id,
+          channelName: channel.channelName,
+          tabId: tab._id,
+          tabName: tab.tabName,
+          contextPath: contextPath,
+        },
+      },
     });
 
     return generateResponse(

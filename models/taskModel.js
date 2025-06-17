@@ -63,6 +63,7 @@ const taskSchema = new Schema({
   attachments: [{ type: String }],
   customFields: [customFieldSchema], // Add custom fields array
   checklist: { type: [checklistItemSchema], default: [] },
+  version: { type: Number, default: 0 }, // For optimistic locking and conflict resolution
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
