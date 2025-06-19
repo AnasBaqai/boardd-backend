@@ -294,12 +294,37 @@ const processTaskUpdate = async (socket, data) => {
 
 // Initialize socket.io
 exports.initSocket = (server) => {
+  const allowedOrigins = [
+    "http://localhost:3000", // Local development
+    "http://localhost:3001", // Alternative local port
+    "https://boarddd-frontend.vercel.app", // Production Vercel frontend
+    "https://boarddd.ddns.net", // Production backend domain
+    "https://www.boarddd.ddns.net", // Production with www
+    // Add your frontend domain here
+    "http://localhost:5173", // Vite default port
+    "http://localhost:4000", // Alternative frontend port
+  ];
+
   io = socketIO(server, {
     cors: {
-      origin: "*",
+      origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          console.log("Socket CORS blocked origin:", origin);
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       methods: ["GET", "POST"],
       credentials: true,
+      allowEIO3: true, // Support for Engine.IO v3 clients
     },
+    transports: ["websocket", "polling"], // Enable both transports
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   io.on("connection", (socket) => {

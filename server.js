@@ -54,9 +54,12 @@ app.use(
 const allowedOrigins = [
   "http://localhost:3000", // Local development
   "http://localhost:3001", // Alternative local port
+  "http://localhost:5173", // Vite default port
+  "http://localhost:4000", // Alternative frontend port
   "https://boarddd-frontend.vercel.app", // Production Vercel frontend
   "https://boarddd.ddns.net", // Production backend domain
   "https://www.boarddd.ddns.net", // Production with www
+  // Add your actual frontend domain here
 ];
 
 app.use(
