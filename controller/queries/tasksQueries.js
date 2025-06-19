@@ -146,13 +146,38 @@ exports.getTaskByIdQuery = (taskId, userId = null) => {
               $expr: { $eq: ["$taskId", "$$taskId"] },
             },
           },
-          // Project only needed activity fields
+          // Lookup user details for each activity
+          {
+            $lookup: {
+              from: "users",
+              localField: "userId",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          {
+            $unwind: {
+              path: "$user",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          // Project activity fields including user details
           {
             $project: {
               _id: 1,
               message: 1,
               timestamp: 1,
               actionType: 1,
+              field: 1,
+              previousValue: 1,
+              newValue: 1,
+              userId: 1,
+              user: {
+                _id: "$user._id",
+                name: "$user.name",
+                email: "$user.email",
+                role: "$user.role",
+              },
             },
           },
           { $sort: { timestamp: -1 } },
