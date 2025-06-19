@@ -106,24 +106,28 @@ exports.getTaskByIdQuery = (taskId, userId = null) => {
               from: "users",
               localField: "assignedTo",
               foreignField: "_id",
-              as: "assignee",
+              as: "assignees",
             },
           },
-          {
-            $unwind: {
-              path: "$assignee",
-              preserveNullAndEmptyArrays: true,
-            },
-          },
-          // Project only needed subtask fields
+          // Project only needed subtask fields with proper assignee array
           {
             $project: {
               _id: 1,
               title: 1,
-              assignee: {
-                _id: "$assignee._id",
-                name: "$assignee.name",
-                email: "$assignee.email",
+              isActive: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              assignees: {
+                $map: {
+                  input: "$assignees",
+                  as: "assignee",
+                  in: {
+                    _id: "$$assignee._id",
+                    name: "$$assignee.name",
+                    email: "$$assignee.email",
+                    role: "$$assignee.role",
+                  },
+                },
               },
             },
           },
