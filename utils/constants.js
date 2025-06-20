@@ -130,3 +130,31 @@ exports.TASK_PRIORITY = Object.freeze({
   MEDIUM: "medium",
   HIGH: "high",
 });
+
+// Form builder constants
+exports.FORM_FIELD_TYPES = Object.freeze({
+  TEXT: "text",
+  EMAIL: "email",
+  NUMBER: "number",
+  TEXTAREA: "textarea",
+  SELECT: "select",
+  CHECKBOX: "checkbox",
+  RADIO: "radio",
+  DATE: "date",
+  TIME: "time",
+  FILE: "file",
+  PHONE: "phone",
+  URL: "url",
+});
+
+exports.FORM_STATUS = Object.freeze({
+  DRAFT: "draft",
+  PUBLISHED: "published",
+  ARCHIVED: "archived",
+});
+
+exports.FORM_SHARING = Object.freeze({
+  PRIVATE: "private",
+  PUBLIC: "public",
+  LINK_ONLY: "link_only",
+});
