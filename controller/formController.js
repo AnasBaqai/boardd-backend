@@ -12,6 +12,20 @@ const {
   deleteForm,
   getAllForms,
 } = require("../models/formModel");
+const {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  Table,
+  TableRow,
+  TableCell,
+  AlignmentType,
+  WidthType,
+  HeadingLevel,
+} = require("docx");
+const fs = require("fs");
+const path = require("path");
 
 // Helper function to parse date strings (same as project controller)
 const parseDate = (dateString) => {
@@ -399,5 +413,750 @@ exports.deleteForm = async (req, res, next) => {
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message,
     });
+  }
+};
+
+/**
+ * Download form as DOCX file
+ */
+exports.downloadForm = async (req, res, next) => {
+  try {
+    const { formId } = req.params;
+    const { format = "docx" } = req.query; // Support for future formats
+    const userId = req?.user?.id;
+
+    // Find form
+    const form = await findForm({ _id: formId, isActive: true });
+    if (!form) {
+      return next({
+        statusCode: STATUS_CODES.NOT_FOUND,
+        message: "Form not found",
+      });
+    }
+
+    // Validate user has access
+    if (userId) {
+      const tab = await findChannelTab({ _id: form.tabId });
+      if (!tab || !tab?.members?.includes(userId)) {
+        return next({
+          statusCode: STATUS_CODES.FORBIDDEN,
+          message: "You don't have access to download this form",
+        });
+      }
+    }
+
+    // Get creator info for form metadata
+    const creator = await findUser({ _id: form.createdBy });
+    const tab = await findChannelTab({ _id: form.tabId });
+    const channel = await findChannel({ _id: tab.channelId });
+
+    if (format.toLowerCase() === "docx") {
+      return await generateDocxDownload(form, creator, tab, channel, res);
+    } else {
+      return next({
+        statusCode: STATUS_CODES.BAD_REQUEST,
+        message: "Unsupported format. Only 'docx' is currently supported.",
+      });
+    }
+  } catch (error) {
+    console.error("Error in downloadForm:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to download form",
+    });
+  }
+};
+
+/**
+ * Generate DOCX file and send as download
+ */
+const generateDocxDownload = async (form, creator, tab, channel, res) => {
+  try {
+    // Create document sections
+    const children = [];
+
+    // Title Section with styling
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: form.title,
+            bold: true,
+            size: 40, // 20pt
+            color: "2E5C8E", // Professional blue
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      })
+    );
+
+    // Form Type
+    if (form.type && form.type.trim() !== "") {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: form.type,
+              italics: true,
+              size: 28, // 14pt
+              color: "666666",
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 300 },
+        })
+      );
+    }
+
+    // Description
+    if (form.description && form.description.trim() !== "") {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: form.description,
+              size: 24, // 12pt
+              color: "333333",
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 600 },
+        })
+      );
+    }
+
+    // Instructions
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "Please fill out the form below:",
+            size: 22,
+            color: "666666",
+            italics: true,
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 800 },
+      })
+    );
+
+    // Form Fields - Render as actual form fields
+    if (form.fields && form.fields.length > 0) {
+      // Sort fields by order
+      const sortedFields = [...form.fields].sort(
+        (a, b) => (a.order || 0) - (b.order || 0)
+      );
+
+      sortedFields.forEach((field, index) => {
+        // Parse field styling
+        const fieldStyling = field.styling || {};
+        const fieldValidation = field.validation || {};
+
+        // Determine field colors
+        const labelColor = fieldStyling.color || "333333";
+        const fieldBackgroundColor = fieldStyling.backgroundColor || "F8F9FA";
+
+        // Determine font size
+        let fontSize = 24; // Default 12pt
+        if (fieldStyling.fontSize === "small") fontSize = 20; // 10pt
+        if (fieldStyling.fontSize === "large") fontSize = 28; // 14pt
+
+        // Determine text alignment
+        let textAlignment = AlignmentType.LEFT;
+        if (fieldStyling.textAlign === "center")
+          textAlignment = AlignmentType.CENTER;
+        if (fieldStyling.textAlign === "right")
+          textAlignment = AlignmentType.RIGHT;
+        if (fieldStyling.textAlign === "justify")
+          textAlignment = AlignmentType.JUSTIFIED;
+
+        // Field Label with styling
+        const labelChildren = [
+          new TextRun({
+            text: field.label,
+            bold: fieldStyling.fontWeight === "bold" || true,
+            size: fontSize + 2, // Slightly larger for label
+            color: labelColor,
+            font: fieldStyling.fontFamily || "Arial",
+          }),
+        ];
+
+        // Add required asterisk if field is required
+        if (fieldValidation.required) {
+          labelChildren.push(
+            new TextRun({
+              text: " *",
+              bold: true,
+              size: fontSize + 2,
+              color: "E74C3C", // Red
+            })
+          );
+        }
+
+        children.push(
+          new Paragraph({
+            children: labelChildren,
+            alignment: textAlignment,
+            spacing: { before: 400, after: 150 },
+          })
+        );
+
+        // Field Description (if exists)
+        if (
+          fieldStyling.description &&
+          fieldStyling.description.trim() !== ""
+        ) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: fieldStyling.description,
+                  size: fontSize - 2, // Smaller than field
+                  color: "666666",
+                  italics: true,
+                  font: fieldStyling.fontFamily || "Arial",
+                }),
+              ],
+              alignment: textAlignment,
+              spacing: { after: 100 },
+              indent: { left: 200 },
+            })
+          );
+        }
+
+        // Render field based on type
+        switch (field.type.toLowerCase()) {
+          case "text":
+          case "email":
+          case "phone":
+          case "url":
+            // Text input field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text:
+                      fieldStyling.placeholder ||
+                      `Enter ${field.label.toLowerCase()}...`,
+                    size: fontSize,
+                    color: "999999",
+                    italics: true,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+                shading: {
+                  fill: fieldBackgroundColor,
+                },
+                border: {
+                  top: { style: "single", size: 1, color: "CCCCCC" },
+                  bottom: { style: "single", size: 1, color: "CCCCCC" },
+                  left: { style: "single", size: 1, color: "CCCCCC" },
+                  right: { style: "single", size: 1, color: "CCCCCC" },
+                },
+              })
+            );
+
+            // Add underline for writing space
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "____________________________________________",
+                    size: fontSize,
+                    color: "CCCCCC",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+              })
+            );
+            break;
+
+          case "textarea":
+            // Multi-line text area
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text:
+                      fieldStyling.placeholder ||
+                      `Enter ${field.label.toLowerCase()}...`,
+                    size: fontSize,
+                    color: "999999",
+                    italics: true,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+                shading: {
+                  fill: fieldBackgroundColor,
+                },
+                border: {
+                  top: { style: "single", size: 1, color: "CCCCCC" },
+                  bottom: { style: "single", size: 1, color: "CCCCCC" },
+                  left: { style: "single", size: 1, color: "CCCCCC" },
+                  right: { style: "single", size: 1, color: "CCCCCC" },
+                },
+              })
+            );
+
+            // Add multiple lines for writing
+            for (let i = 0; i < 4; i++) {
+              children.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: "____________________________________________",
+                      size: fontSize,
+                      color: "CCCCCC",
+                    }),
+                  ],
+                  alignment: textAlignment,
+                  spacing: { after: 100 },
+                  indent: { left: 200 },
+                })
+              );
+            }
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: "" })],
+                spacing: { after: 200 },
+              })
+            );
+            break;
+
+          case "number":
+            // Number input field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: fieldStyling.placeholder || "Enter number...",
+                    size: fontSize,
+                    color: "999999",
+                    italics: true,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+                shading: {
+                  fill: fieldBackgroundColor,
+                },
+                border: {
+                  top: { style: "single", size: 1, color: "CCCCCC" },
+                  bottom: { style: "single", size: 1, color: "CCCCCC" },
+                  left: { style: "single", size: 1, color: "CCCCCC" },
+                  right: { style: "single", size: 1, color: "CCCCCC" },
+                },
+              })
+            );
+
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "____________",
+                    size: fontSize,
+                    color: "CCCCCC",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+              })
+            );
+            break;
+
+          case "select":
+            // Dropdown/Select field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Select an option:",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+              })
+            );
+
+            if (field.options && field.options.length > 0) {
+              field.options.forEach((option, optIndex) => {
+                children.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `☐ ${option}`,
+                        size: fontSize,
+                        color: labelColor,
+                        font: fieldStyling.fontFamily || "Arial",
+                      }),
+                    ],
+                    alignment: textAlignment,
+                    spacing: { after: 80 },
+                    indent: { left: 400 },
+                  })
+                );
+              });
+            }
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: "" })],
+                spacing: { after: 200 },
+              })
+            );
+            break;
+
+          case "radio":
+            // Radio button field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Choose one option:",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+              })
+            );
+
+            if (field.options && field.options.length > 0) {
+              field.options.forEach((option, optIndex) => {
+                children.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `○ ${option}`,
+                        size: fontSize,
+                        color: labelColor,
+                        font: fieldStyling.fontFamily || "Arial",
+                      }),
+                    ],
+                    alignment: textAlignment,
+                    spacing: { after: 80 },
+                    indent: { left: 400 },
+                  })
+                );
+              });
+            }
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: "" })],
+                spacing: { after: 200 },
+              })
+            );
+            break;
+
+          case "checkbox":
+            // Checkbox field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Select all that apply:",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+              })
+            );
+
+            if (field.options && field.options.length > 0) {
+              field.options.forEach((option, optIndex) => {
+                children.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `☐ ${option}`,
+                        size: fontSize,
+                        color: labelColor,
+                        font: fieldStyling.fontFamily || "Arial",
+                      }),
+                    ],
+                    alignment: textAlignment,
+                    spacing: { after: 80 },
+                    indent: { left: 400 },
+                  })
+                );
+              });
+            }
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: "" })],
+                spacing: { after: 200 },
+              })
+            );
+            break;
+
+          case "date":
+            // Date field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Date: _____ / _____ / _________",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+              })
+            );
+
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "      (DD)     (MM)      (YYYY)",
+                    size: fontSize - 4,
+                    color: "999999",
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+              })
+            );
+            break;
+
+          case "time":
+            // Time field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Time: _____ : _____ ☐ AM ☐ PM",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+              })
+            );
+
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "         (HH)     (MM)",
+                    size: fontSize - 4,
+                    color: "999999",
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+              })
+            );
+            break;
+
+          case "file":
+            // File upload field
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Attach file: [ Browse... ] ________________",
+                    size: fontSize,
+                    color: labelColor,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+                shading: {
+                  fill: fieldBackgroundColor,
+                },
+                border: {
+                  top: { style: "single", size: 1, color: "CCCCCC" },
+                  bottom: { style: "single", size: 1, color: "CCCCCC" },
+                  left: { style: "single", size: 1, color: "CCCCCC" },
+                  right: { style: "single", size: 1, color: "CCCCCC" },
+                },
+              })
+            );
+            break;
+
+          default:
+            // Default field rendering
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: fieldStyling.placeholder || `${field.type} field`,
+                    size: fontSize,
+                    color: "999999",
+                    italics: true,
+                    font: fieldStyling.fontFamily || "Arial",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 100 },
+                indent: { left: 200 },
+                shading: {
+                  fill: fieldBackgroundColor,
+                },
+                border: {
+                  top: { style: "single", size: 1, color: "CCCCCC" },
+                  bottom: { style: "single", size: 1, color: "CCCCCC" },
+                  left: { style: "single", size: 1, color: "CCCCCC" },
+                  right: { style: "single", size: 1, color: "CCCCCC" },
+                },
+              })
+            );
+
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "____________________________________________",
+                    size: fontSize,
+                    color: "CCCCCC",
+                  }),
+                ],
+                alignment: textAlignment,
+                spacing: { after: 300 },
+                indent: { left: 200 },
+              })
+            );
+            break;
+        }
+
+        // Add spacing between fields
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: "" })],
+            spacing: { after: 400 },
+          })
+        );
+      });
+    }
+
+    // Form footer
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: "" })],
+        spacing: { after: 400 },
+        border: {
+          top: {
+            color: "CCCCCC",
+            size: 1,
+            style: "single",
+          },
+        },
+      })
+    );
+
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "Thank you for completing this form!",
+            size: 24,
+            color: "2E5C8E",
+            bold: true,
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 400, after: 400 },
+      })
+    );
+
+    // Metadata footer
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Form created by ${
+              creator?.name || creator?.email || "Unknown"
+            } | ${channel?.channelName} / ${
+              tab?.tabName
+            } | Generated: ${new Date().toLocaleDateString()}`,
+            size: 16,
+            color: "999999",
+            italics: true,
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 600 },
+      })
+    );
+
+    // Create the document
+    const doc = new Document({
+      sections: [
+        {
+          properties: {
+            page: {
+              margin: {
+                top: 1440, // 1 inch
+                right: 1440,
+                bottom: 1440,
+                left: 1440,
+              },
+            },
+          },
+          children: children,
+        },
+      ],
+    });
+
+    // Generate buffer
+    const buffer = await Packer.toBuffer(doc);
+
+    // Generate filename
+    const sanitizedTitle = form.title
+      .replace(/[^a-zA-Z0-9\s]/g, "")
+      .replace(/\s+/g, "_");
+    const filename = `${sanitizedTitle}_Form_${
+      new Date().toISOString().split("T")[0]
+    }.docx`;
+
+    // Set response headers for download
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", buffer.length);
+
+    // Send the file
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error generating DOCX:", error);
+    throw error;
   }
 };
