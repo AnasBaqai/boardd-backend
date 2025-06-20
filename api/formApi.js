@@ -7,6 +7,7 @@ const {
   getFormById,
   updateForm,
   deleteForm,
+  downloadForm,
 } = require("../controller/formController");
 const Auth = require("../middlewares/Auth");
 const { ROLES } = require("../utils/constants");
@@ -59,6 +60,14 @@ class FormApi {
       validateFormId,
       validateUpdateForm,
       updateForm
+    );
+
+    // Download form as DOCX
+    router.get(
+      "/:formId/download",
+      Auth([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.GUEST]), // Allow guest access for public forms
+      validateFormId,
+      downloadForm
     );
 
     // Delete form (soft delete)
