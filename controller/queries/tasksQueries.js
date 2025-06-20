@@ -286,6 +286,7 @@ exports.getTaskByIdQuery = (taskId, userId = null) => {
         strokeColor: 1,
         type: 1,
         customFields: 1,
+        version: 1,
         createdAt: 1,
         updatedAt: 1,
         projectId: 1,
