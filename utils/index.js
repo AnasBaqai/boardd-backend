@@ -357,3 +357,10 @@ exports.setRefreshTokenCookie = (res, refreshToken) => {
 exports.extractDomainFromEmail = (email) => {
   return email.split("@")[1];
 };
+
+// Helper function to generate next order number for form fields
+exports.generateNextOrder = (fields) => {
+  if (!fields || fields.length === 0) return 1;
+  const maxOrder = Math.max(...fields.map((field) => field.order || 0));
+  return maxOrder + 1;
+};
