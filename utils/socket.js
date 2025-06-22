@@ -62,16 +62,19 @@ const processTaskUpdate = async (socket, data) => {
   try {
     // Validate input
     if (!taskId || !field || userId === undefined) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: "Missing required fields: taskId, field, userId",
         taskId,
+        field,
       });
       return;
     }
 
     // Validate field value
     if (!validateFieldValue(field, value)) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: `Invalid value for field ${field}`,
         taskId,
         field,
@@ -83,10 +86,12 @@ const processTaskUpdate = async (socket, data) => {
     // Check for conflicts
     const updateKey = `${taskId}-${field}`;
     if (pendingUpdates.has(updateKey)) {
-      socket.emit("task-update-conflict", {
+      socket.emit("task-update-response", {
+        success: false,
+        error: "Another update is in progress for this field",
         taskId,
         field,
-        message: "Another update is in progress for this field",
+        conflict: true,
       });
       return;
     }
@@ -97,9 +102,11 @@ const processTaskUpdate = async (socket, data) => {
     // Find and validate task
     const task = await findTask({ _id: taskId });
     if (!task) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: "Task not found",
         taskId,
+        field,
       });
       pendingUpdates.delete(updateKey);
       return;
@@ -107,12 +114,14 @@ const processTaskUpdate = async (socket, data) => {
 
     // Version check for conflict resolution
     if (version && task.version && task.version > version) {
-      socket.emit("task-update-conflict", {
+      socket.emit("task-update-response", {
+        success: false,
+        error: "Task has been updated by another user",
         taskId,
         field,
+        conflict: true,
         currentVersion: task.version,
         providedVersion: version,
-        message: "Task has been updated by another user",
       });
       pendingUpdates.delete(updateKey);
       return;
@@ -125,9 +134,11 @@ const processTaskUpdate = async (socket, data) => {
     ]);
 
     if (!project || !user) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: "Project or user not found",
         taskId,
+        field,
       });
       pendingUpdates.delete(updateKey);
       return;
@@ -139,9 +150,11 @@ const processTaskUpdate = async (socket, data) => {
     ]);
 
     if (!tab || !channel) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: "Tab or channel not found",
         taskId,
+        field,
       });
       pendingUpdates.delete(updateKey);
       return;
@@ -155,9 +168,11 @@ const processTaskUpdate = async (socket, data) => {
       task.createdBy.toString() === userId;
 
     if (!canUpdate) {
-      socket.emit("task-update-error", {
+      socket.emit("task-update-response", {
+        success: false,
         error: "Permission denied",
         taskId,
+        field,
       });
       pendingUpdates.delete(updateKey);
       return;
@@ -184,8 +199,8 @@ const processTaskUpdate = async (socket, data) => {
       { new: true }
     );
 
-    // Create activity
-    const message = generateActivityMessage(field, userName, {
+    // Create activity with both messages
+    const activityMessage = generateActivityMessage(field, userName, {
       previousValue,
       newValue: processedValue,
       taskTitle: task.title,
@@ -200,7 +215,7 @@ const processTaskUpdate = async (socket, data) => {
       field,
       previousValue,
       newValue: processedValue,
-      message,
+      message: activityMessage,
       timestamp: new Date(),
     });
 
@@ -236,18 +251,19 @@ const processTaskUpdate = async (socket, data) => {
       await Promise.all(notifications);
     }
 
-    // Emit using existing emitTaskEvent function
-    exports.emitTaskEvent({
+    // Emit minimal task update response to task room
+    io.to(`task:${taskId}`).emit("task-update-response", {
+      success: true,
       taskId,
-      tabId: project.tabId,
-      type: "TASK_UPDATED",
-      payload: {
-        task: updatedTask,
-        activities: [activity],
-        field,
-        previousValue,
-        newValue: processedValue,
-        updatedBy: {
+      field,
+      previousValue,
+      newValue: processedValue,
+      version: updatedTask.version,
+      activity: {
+        _id: activity._id,
+        message: activityMessage, // Contains both forCreator and forOthers
+        timestamp: activity.timestamp,
+        user: {
           _id: user._id,
           name: user.name,
           email: user.email,
@@ -255,7 +271,33 @@ const processTaskUpdate = async (socket, data) => {
       },
     });
 
-    // Emit notifications
+    // Keep tab-activity emission unchanged for notifications
+    const notificationMessage = generateTabNotificationMessage("TASK_UPDATED", {
+      updatedBy: user,
+      task: updatedTask,
+      project,
+      field,
+      newValue: processedValue,
+      activities: [activity],
+    });
+
+    io.to(`tab:${project.tabId}`).emit("tab-activity", {
+      type: "TASK_UPDATED",
+      task: updatedTask,
+      activities: [activity],
+      field,
+      previousValue,
+      newValue: processedValue,
+      updatedBy: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+      notification: notificationMessage,
+      timestamp: new Date(),
+    });
+
+    // Emit notifications to assigned users
     notifications.forEach((notification) => {
       exports.emitUserNotification(notification.userId, {
         type: notification.type,
@@ -270,17 +312,10 @@ const processTaskUpdate = async (socket, data) => {
         },
       });
     });
-
-    // Send success confirmation to originating socket
-    socket.emit("task-update-success", {
-      taskId,
-      field,
-      value: processedValue,
-      version: updatedTask.version,
-    });
   } catch (error) {
     console.error(`Error processing task update for ${taskId}:`, error);
-    socket.emit("task-update-error", {
+    socket.emit("task-update-response", {
+      success: false,
       error: error.message,
       taskId,
       field,
