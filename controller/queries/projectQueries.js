@@ -840,6 +840,7 @@ exports.getTasksBoardQuery = (
               status: 1,
               priority: 1,
               strokeColor: 1, // Add strokeColor
+              projectId: 1, // Add projectId
               createdBy: "$createdByUser", // Use the unwound user object
               dueDate: 1, // Keep for today/overdue logic
               // Computed fields for categorization
@@ -968,6 +969,7 @@ exports.getTasksBoardQuery = (
                     status: "$$task.status",
                     priority: "$$task.priority",
                     strokeColor: "$$task.strokeColor",
+                    projectId: "$$task.projectId",
                     createdBy: "$$task.createdBy",
                   },
                 },
@@ -1003,6 +1005,7 @@ exports.getTasksBoardQuery = (
                     status: "$$task.status",
                     priority: "$$task.priority",
                     strokeColor: "$$task.strokeColor",
+                    projectId: "$$task.projectId",
                     createdBy: "$$task.createdBy",
                   },
                 },
@@ -1037,6 +1040,7 @@ exports.getTasksBoardQuery = (
                     status: "$$task.status",
                     priority: "$$task.priority",
                     strokeColor: "$$task.strokeColor",
+                    projectId: "$$task.projectId",
                     createdBy: "$$task.createdBy",
                   },
                 },
