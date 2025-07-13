@@ -52,3 +52,14 @@ exports.getAllProjects = async ({
   });
   return { [responseKey]: data, pagination };
 };
+
+// get all projects without pagination (for calendar view)
+exports.getAllProjectsWithoutPagination = async (query) => {
+  try {
+    const data = await ProjectModel.aggregate(query);
+    return data;
+  } catch (error) {
+    console.error("Error in getAllProjectsWithoutPagination:", error);
+    throw error;
+  }
+};

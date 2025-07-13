@@ -31,24 +31,6 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
-    // Lookup company details for context path
-    {
-      $lookup: {
-        from: "companies",
-        localField: "companyId",
-        foreignField: "_id",
-        as: "company",
-        pipeline: [
-          {
-            $project: {
-              _id: 1,
-              name: 1,
-            },
-          },
-        ],
-      },
-    },
-
     // Lookup tasks for these projects
     {
       $lookup: {
@@ -101,14 +83,6 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
-    // Unwind company array
-    {
-      $unwind: {
-        path: "$company",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
     // Unwind tasks to work with individual tasks
     {
       $unwind: {
@@ -117,7 +91,7 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
       },
     },
 
-    // Project the final lightweight task structure with context path
+    // Project the final lightweight task structure
     {
       $project: {
         _id: "$tasks._id",
@@ -127,16 +101,6 @@ exports.getTasksCalendarQuery = (channelId, tabId, userId, currentDate) => {
         dueDate: "$tasks.dueDate",
         strokeColor: "$tasks.strokeColor",
         isOverdue: "$tasks.isOverdue",
-        // Context path for tasks: company/project/task
-        contextPath: {
-          $concat: [
-            { $ifNull: ["$company.name", "Unknown Company"] },
-            "/",
-            "$name",
-            "/",
-            "$tasks.title",
-          ],
-        },
         // Minimal project context
         project: {
           _id: "$_id",

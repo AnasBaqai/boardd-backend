@@ -199,8 +199,6 @@ exports.getProjectsOfTab = async (req, res, next) => {
         channel,
         tab,
         user,
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 100, // Higher default for calendar
       });
     }
 
@@ -319,66 +317,34 @@ exports.getProjectsOfTab = async (req, res, next) => {
 // Helper function to handle calendar view
 const handleCalendarView = async (req, res, next, params) => {
   try {
-    const {
-      channelId,
-      tabId,
-      userId,
-      currentDate,
-      channel,
-      tab,
-      user,
-      page,
-      limit,
-    } = params;
+    const { channelId, tabId, userId, currentDate, channel, tab, user } =
+      params;
 
     // Get calendar query for tasks
     const query = getTasksCalendarQuery(channelId, tabId, userId, currentDate);
 
-    // Fetch tasks with pagination
-    const result = await getAllProjects({
-      query,
-      page,
-      limit,
-      responseKey: "tasks",
-    });
+    // Execute query without pagination to get all tasks for the month
+    const ProjectModel = require("../models/projectModel");
+    const tasks = await ProjectModel.getAllProjectsWithoutPagination(query);
 
     // Calculate month boundaries for context
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
-    // Fetch company details for context
-    const company = await require("../models/companyModel").findCompany({
-      _id: channel.companyId,
-    });
-
-    // Prepare lightweight calendar response
+    // Prepare lightweight calendar response without context
     const responseData = {
-      tasks: result.tasks,
-      pagination: result.pagination,
+      tasks: tasks || [],
       view: "calendar",
-      context: {
-        channel: {
-          id: channel._id,
-          name: channel.channelName,
-        },
-        tab: {
-          id: tab._id,
-          name: tab.tabName,
-        },
-        company: {
-          id: channel.companyId,
-          name: company?.name || "Unknown Company",
-        },
-        calendar: {
-          currentDate: currentDate.toISOString().split("T")[0],
-          month: month + 1, // 1-based month
-          year,
-          monthStart: monthStart.toISOString().split("T")[0],
-          monthEnd: monthEnd.toISOString().split("T")[0],
-          monthName: monthStart.toLocaleDateString("en-US", { month: "long" }),
-        },
+      totalTasks: tasks ? tasks.length : 0,
+      monthInfo: {
+        currentDate: currentDate.toISOString().split("T")[0],
+        month: month + 1, // 1-based month
+        year,
+        monthStart: monthStart.toISOString().split("T")[0],
+        monthEnd: monthEnd.toISOString().split("T")[0],
+        monthName: monthStart.toLocaleDateString("en-US", { month: "long" }),
       },
     };
 
