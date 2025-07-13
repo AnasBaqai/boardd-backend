@@ -410,29 +410,32 @@ const handleBoardView = async (req, res, next, params) => {
       currentPage: boardData.currentPage,
       limit: boardData.limit,
       totalTasks: boardData.totalTasks,
-      categories: {
-        tasksForToday: {
+      categories: [
+        {
+          key: "tasksForToday",
           title: "Tasks for Today",
+          description: "Tasks due today or overdue",
           tasks: boardData.tasksForToday.tasks,
           totalCount: boardData.tasksForToday.totalCount,
           hasMore: boardData.tasksForToday.hasMore,
-          description: "Tasks due today or overdue",
         },
-        inProgressTasks: {
+        {
+          key: "inProgressTasks",
           title: "In Progress Tasks",
+          description: "Tasks currently being worked on",
           tasks: boardData.inProgressTasks.tasks,
           totalCount: boardData.inProgressTasks.totalCount,
           hasMore: boardData.inProgressTasks.hasMore,
-          description: "Tasks currently being worked on",
         },
-        completedTasks: {
+        {
+          key: "completedTasks",
           title: "Completed Tasks",
+          description: "Tasks that have been completed",
           tasks: boardData.completedTasks.tasks,
           totalCount: boardData.completedTasks.totalCount,
           hasMore: boardData.completedTasks.hasMore,
-          description: "Tasks that have been completed",
         },
-      },
+      ],
     };
 
     return generateResponse(
