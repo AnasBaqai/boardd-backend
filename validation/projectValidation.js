@@ -243,7 +243,7 @@ const channelTabParamValidation = Joi.object({
 // Query validation for getting projects
 const getProjectsQueryValidation = Joi.object({
   view: Joi.string()
-    .valid("overview", "list", "calendar")
+    .valid("overview", "list", "calendar", "board")
     .optional()
     .default("list")
     .messages({

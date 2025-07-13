@@ -9,6 +9,7 @@ const {
   getProjectsOfTabQuery,
   getProjectsOverviewQuery,
   getTasksCalendarQuery,
+  getTasksBoardQuery,
 } = require("./queries/projectQueries");
 
 // Helper function to parse date strings
@@ -202,6 +203,20 @@ exports.getProjectsOfTab = async (req, res, next) => {
       });
     }
 
+    // Handle board view separately
+    if (view === "board") {
+      return handleBoardView(req, res, next, {
+        channelId,
+        tabId,
+        userId,
+        channel,
+        tab,
+        user,
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 10,
+      });
+    }
+
     // Choose query based on view parameter
     let query;
     let responseKey = "projects";
@@ -362,6 +377,75 @@ const handleCalendarView = async (req, res, next, params) => {
     return next({
       statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
       message: error?.message ?? "Failed to fetch calendar data",
+    });
+  }
+};
+
+// Helper function to handle board view
+const handleBoardView = async (req, res, next, params) => {
+  try {
+    const { channelId, tabId, userId, channel, tab, user, page, limit } =
+      params;
+
+    // Get board query for tasks grouped by status
+    const query = getTasksBoardQuery(channelId, tabId, userId, page, limit);
+
+    // Execute query without pagination wrapper (pagination is handled in query)
+    const ProjectModel = require("../models/projectModel");
+    const result = await ProjectModel.getAllProjectsWithoutPagination(query);
+
+    // Extract the result (should be single document with grouped tasks)
+    const boardData = result[0] || {
+      tasksForToday: { tasks: [], totalCount: 0, hasMore: false },
+      inProgressTasks: { tasks: [], totalCount: 0, hasMore: false },
+      completedTasks: { tasks: [], totalCount: 0, hasMore: false },
+      totalTasks: 0,
+      currentPage: page,
+      limit: limit,
+    };
+
+    // Prepare board response
+    const responseData = {
+      view: "board",
+      currentPage: boardData.currentPage,
+      limit: boardData.limit,
+      totalTasks: boardData.totalTasks,
+      categories: {
+        tasksForToday: {
+          title: "Tasks for Today",
+          tasks: boardData.tasksForToday.tasks,
+          totalCount: boardData.tasksForToday.totalCount,
+          hasMore: boardData.tasksForToday.hasMore,
+          description: "Tasks due today or overdue",
+        },
+        inProgressTasks: {
+          title: "In Progress Tasks",
+          tasks: boardData.inProgressTasks.tasks,
+          totalCount: boardData.inProgressTasks.totalCount,
+          hasMore: boardData.inProgressTasks.hasMore,
+          description: "Tasks currently being worked on",
+        },
+        completedTasks: {
+          title: "Completed Tasks",
+          tasks: boardData.completedTasks.tasks,
+          totalCount: boardData.completedTasks.totalCount,
+          hasMore: boardData.completedTasks.hasMore,
+          description: "Tasks that have been completed",
+        },
+      },
+    };
+
+    return generateResponse(
+      responseData,
+      `Board view tasks fetched successfully (Page ${page})`,
+      res,
+      STATUS_CODES.SUCCESS
+    );
+  } catch (error) {
+    console.error("Error in handleBoardView:", error);
+    return next({
+      statusCode: STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: error?.message ?? "Failed to fetch board data",
     });
   }
 };

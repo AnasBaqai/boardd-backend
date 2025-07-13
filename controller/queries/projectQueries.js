@@ -756,3 +756,297 @@ exports.getProjectsOfTabQuery = (channelId, tabId) => {
     },
   ];
 };
+
+/**
+ * Get tasks for board view grouped by status with pagination
+ * @param {string} channelId - Channel ID
+ * @param {string} tabId - Tab ID
+ * @param {string} userId - Current user ID
+ * @param {number} page - Page number for pagination
+ * @param {number} limit - Limit per category (default 5)
+ * @returns {Array} Aggregation pipeline
+ */
+exports.getTasksBoardQuery = (
+  channelId,
+  tabId,
+  userId,
+  page = 1,
+  limit = 5
+) => {
+  const skip = (page - 1) * limit;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return [
+    // Match projects by channelId and tabId
+    {
+      $match: {
+        channelId: Types.ObjectId.createFromHexString(channelId),
+        tabId: Types.ObjectId.createFromHexString(tabId),
+        status: "active", // Only active projects
+      },
+    },
+
+    // Lookup tasks for these projects
+    {
+      $lookup: {
+        from: "tasks",
+        localField: "_id",
+        foreignField: "projectId",
+        as: "tasks",
+        pipeline: [
+          {
+            $match: {
+              isActive: true,
+              // User must be assigned to task OR created the task
+              $or: [
+                { assignedTo: Types.ObjectId.createFromHexString(userId) },
+                { createdBy: Types.ObjectId.createFromHexString(userId) },
+              ],
+            },
+          },
+          // Lookup task creator details
+          {
+            $lookup: {
+              from: "users",
+              localField: "createdBy",
+              foreignField: "_id",
+              as: "createdByUser",
+              pipeline: [
+                {
+                  $project: {
+                    _id: 1,
+                    name: 1,
+                    email: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $unwind: {
+              path: "$createdByUser",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          // Project task fields with computed properties
+          {
+            $project: {
+              _id: 1,
+              title: 1,
+              description: 1,
+              status: 1,
+              priority: 1,
+              createdBy: "$createdByUser", // Use the unwound user object
+              dueDate: 1, // Keep for today/overdue logic
+              // Computed fields for categorization
+              isOverdue: {
+                $cond: {
+                  if: {
+                    $and: [
+                      { $ne: ["$dueDate", null] },
+                      { $lt: ["$dueDate", new Date()] },
+                      { $ne: ["$status", "completed"] },
+                    ],
+                  },
+                  then: true,
+                  else: false,
+                },
+              },
+              isDueToday: {
+                $cond: {
+                  if: {
+                    $and: [
+                      { $ne: ["$dueDate", null] },
+                      { $gte: ["$dueDate", today] },
+                      { $lt: ["$dueDate", tomorrow] },
+                    ],
+                  },
+                  then: true,
+                  else: false,
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+
+    // Unwind tasks to work with individual tasks
+    {
+      $unwind: {
+        path: "$tasks",
+        preserveNullAndEmptyArrays: false, // Only projects with tasks
+      },
+    },
+
+    // Replace root with task data
+    {
+      $replaceRoot: {
+        newRoot: "$tasks",
+      },
+    },
+
+    // Group tasks by category
+    {
+      $group: {
+        _id: null,
+        allTasks: { $push: "$$ROOT" },
+        // Tasks for Today (due today or overdue but not completed)
+        tasksForToday: {
+          $push: {
+            $cond: {
+              if: {
+                $or: [
+                  { $eq: ["$isDueToday", true] },
+                  {
+                    $and: [
+                      { $eq: ["$isOverdue", true] },
+                      { $ne: ["$status", "completed"] },
+                    ],
+                  },
+                ],
+              },
+              then: "$$ROOT",
+              else: "$$REMOVE",
+            },
+          },
+        },
+        // In Progress Tasks
+        inProgressTasks: {
+          $push: {
+            $cond: {
+              if: { $eq: ["$status", "in_progress"] },
+              then: "$$ROOT",
+              else: "$$REMOVE",
+            },
+          },
+        },
+        // Completed Tasks
+        completedTasks: {
+          $push: {
+            $cond: {
+              if: { $eq: ["$status", "completed"] },
+              then: "$$ROOT",
+              else: "$$REMOVE",
+            },
+          },
+        },
+      },
+    },
+
+    // Apply pagination and sorting to each category
+    {
+      $project: {
+        // Tasks for Today with pagination
+        tasksForToday: {
+          $let: {
+            vars: {
+              sortedTasks: {
+                $sortArray: {
+                  input: "$tasksForToday",
+                  sortBy: {
+                    isOverdue: -1, // Overdue first
+                    priority: -1, // High priority first
+                    dueDate: 1, // Earliest due date first
+                  },
+                },
+              },
+            },
+            in: {
+              tasks: {
+                $map: {
+                  input: { $slice: ["$$sortedTasks", skip, limit] },
+                  as: "task",
+                  in: {
+                    _id: "$$task._id",
+                    title: "$$task.title",
+                    description: "$$task.description",
+                    status: "$$task.status",
+                    priority: "$$task.priority",
+                    createdBy: "$$task.createdBy",
+                  },
+                },
+              },
+              totalCount: { $size: "$$sortedTasks" },
+              hasMore: { $gt: [{ $size: "$$sortedTasks" }, skip + limit] },
+            },
+          },
+        },
+        // In Progress Tasks with pagination
+        inProgressTasks: {
+          $let: {
+            vars: {
+              sortedTasks: {
+                $sortArray: {
+                  input: "$inProgressTasks",
+                  sortBy: {
+                    priority: -1, // High priority first
+                    dueDate: 1, // Earliest due date first
+                  },
+                },
+              },
+            },
+            in: {
+              tasks: {
+                $map: {
+                  input: { $slice: ["$$sortedTasks", skip, limit] },
+                  as: "task",
+                  in: {
+                    _id: "$$task._id",
+                    title: "$$task.title",
+                    description: "$$task.description",
+                    status: "$$task.status",
+                    priority: "$$task.priority",
+                    createdBy: "$$task.createdBy",
+                  },
+                },
+              },
+              totalCount: { $size: "$$sortedTasks" },
+              hasMore: { $gt: [{ $size: "$$sortedTasks" }, skip + limit] },
+            },
+          },
+        },
+        // Completed Tasks with pagination
+        completedTasks: {
+          $let: {
+            vars: {
+              sortedTasks: {
+                $sortArray: {
+                  input: "$completedTasks",
+                  sortBy: {
+                    priority: -1, // High priority first
+                  },
+                },
+              },
+            },
+            in: {
+              tasks: {
+                $map: {
+                  input: { $slice: ["$$sortedTasks", skip, limit] },
+                  as: "task",
+                  in: {
+                    _id: "$$task._id",
+                    title: "$$task.title",
+                    description: "$$task.description",
+                    status: "$$task.status",
+                    priority: "$$task.priority",
+                    createdBy: "$$task.createdBy",
+                  },
+                },
+              },
+              totalCount: { $size: "$$sortedTasks" },
+              hasMore: { $gt: [{ $size: "$$sortedTasks" }, skip + limit] },
+            },
+          },
+        },
+        // Overall stats
+        totalTasks: { $size: "$allTasks" },
+        currentPage: { $literal: page },
+        limit: { $literal: limit },
+      },
+    },
+  ];
+};
