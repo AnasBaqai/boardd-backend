@@ -394,6 +394,16 @@ const handleBoardView = async (req, res, next, params) => {
     const ProjectModel = require("../models/projectModel");
     const result = await ProjectModel.getAllProjectsWithoutPagination(query);
 
+    // Get custom cards for this tab
+    const { findManyCards } = require("../models/cardModel");
+    const customCards = await findManyCards({
+      channelId,
+      tabId,
+      isActive: true,
+    })
+      .populate("createdBy", "_id name email")
+      .sort({ cardOrder: 1 });
+
     // Extract the result (should be single document with grouped tasks)
     const boardData = result[0] || {
       tasksForToday: { tasks: [], totalCount: 0, hasMore: false },
@@ -404,43 +414,73 @@ const handleBoardView = async (req, res, next, params) => {
       limit: limit,
     };
 
+    // Prepare default categories
+    const defaultCategories = [
+      {
+        key: "tasksForToday",
+        title: "Tasks for Today",
+        description: "Tasks due today or overdue",
+        tasks: boardData.tasksForToday.tasks,
+        totalCount: boardData.tasksForToday.totalCount,
+        hasMore: boardData.tasksForToday.hasMore,
+        type: "default",
+        isEditable: false,
+      },
+      {
+        key: "inProgressTasks",
+        title: "In Progress Tasks",
+        description: "Tasks currently being worked on",
+        tasks: boardData.inProgressTasks.tasks,
+        totalCount: boardData.inProgressTasks.totalCount,
+        hasMore: boardData.inProgressTasks.hasMore,
+        type: "default",
+        isEditable: false,
+      },
+      {
+        key: "completedTasks",
+        title: "Completed Tasks",
+        description: "Tasks that have been completed",
+        tasks: boardData.completedTasks.tasks,
+        totalCount: boardData.completedTasks.totalCount,
+        hasMore: boardData.completedTasks.hasMore,
+        type: "default",
+        isEditable: false,
+      },
+    ];
+
+    // Prepare custom cards
+    const customCardCategories = customCards.map((card) => ({
+      key: `card_${card._id}`,
+      cardId: card._id,
+      title: card.name,
+      description: card.description,
+      color: card.color,
+      tasks: [], // Will be empty initially (tasks are dragged here)
+      totalCount: card.tasks.length,
+      hasMore: false,
+      type: "custom",
+      isEditable: true,
+      createdBy: card.createdBy,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
+    }));
+
+    // Combine all categories
+    const allCategories = [...defaultCategories, ...customCardCategories];
+
     // Prepare board response
     const responseData = {
       view: "board",
       currentPage: boardData.currentPage,
       limit: boardData.limit,
       totalTasks: boardData.totalTasks,
-      categories: [
-        {
-          key: "tasksForToday",
-          title: "Tasks for Today",
-          description: "Tasks due today or overdue",
-          tasks: boardData.tasksForToday.tasks,
-          totalCount: boardData.tasksForToday.totalCount,
-          hasMore: boardData.tasksForToday.hasMore,
-        },
-        {
-          key: "inProgressTasks",
-          title: "In Progress Tasks",
-          description: "Tasks currently being worked on",
-          tasks: boardData.inProgressTasks.tasks,
-          totalCount: boardData.inProgressTasks.totalCount,
-          hasMore: boardData.inProgressTasks.hasMore,
-        },
-        {
-          key: "completedTasks",
-          title: "Completed Tasks",
-          description: "Tasks that have been completed",
-          tasks: boardData.completedTasks.tasks,
-          totalCount: boardData.completedTasks.totalCount,
-          hasMore: boardData.completedTasks.hasMore,
-        },
-      ],
+      totalCards: customCards.length,
+      categories: allCategories,
     };
 
     return generateResponse(
       responseData,
-      `Board view tasks fetched successfully (Page ${page})`,
+      `Board view with ${customCards.length} custom cards fetched successfully (Page ${page})`,
       res,
       STATUS_CODES.SUCCESS
     );

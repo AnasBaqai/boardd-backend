@@ -544,7 +544,7 @@ exports.emitTaskEvent = (data) => {
 
   // Emit task-specific update to users viewing the task
   if (taskId) {
-    io.to(`task:${taskId}`).emit("task-update", {
+    io.to(`task:${taskId}`).emit("task-update-response", {
       type,
       ...payload,
       timestamp: new Date(),
